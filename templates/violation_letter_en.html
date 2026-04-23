@@ -1,0 +1,175 @@
+<!--
+  Permit Solutions Services — Violation Notice Letter (English)
+
+  This template is uploaded to Lob and referenced by template ID (tmpl_xxx).
+  Lob renders this HTML to a PDF at letter creation time, substituting any
+  {{merge_variables}} from the API request.
+
+  Page size: 8.5" x 11" (US Letter), single page.
+  Lob requires 0.5" margin on all sides for the letter format.
+
+  Merge variables (passed via merge_variables on POST /v1/letters):
+    {{date}}                 — today's date, e.g. "April 22, 2026"
+    {{owner_name}}           — full owner name, e.g. "JAQUELIN D CARMEN SOLORZANO"
+    {{owner_address_line1}}  — street address only (Lob's "to" already prints
+                                the full mailing address in the window envelope
+                                area, so we ALSO show it inside the letter body
+                                so the recipient sees the address in context)
+    {{case_number}}          — e.g. "20260246645"
+    {{first_name}}           — first token of owner_name, e.g. "JAQUELIN"
+    {{property_address}}     — short property address, e.g. "8345 NW 186 ST 201"
+    {{violation_subject}}    — derived noun: "windows", "fence", "door",
+                                "fence and electrical", etc.
+    {{jurisdiction}}         — e.g. "Miami-Dade County" or "the City of Homestead"
+
+  Strict-mode safety: every variable used here MUST be passed in every API
+  call (use empty string "" if a value is unknown). Easier to debug than
+  silently-missing fields.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Permit Solutions Services — Violation Notice</title>
+<style>
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.45;
+    color: #111;
+  }
+  .page {
+    /* Lob recommends content area be inside an additional 0.5" safe zone
+       beyond the page margin — total ~1in from each edge for the printable
+       safe area. */
+    padding: 0.5in 0.5in 0.5in 0.5in;
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 0.4in;
+  }
+  .logo img {
+    height: 0.9in;
+  }
+  .date {
+    font-style: italic;
+    margin-bottom: 0.25in;
+  }
+  .recipient-block {
+    margin-bottom: 0.25in;
+  }
+  .recipient-block .case {
+    font-weight: bold;
+    font-style: italic;
+    margin-top: 6pt;
+  }
+  p { margin: 0 0 10pt 0; }
+  .salutation { margin-bottom: 10pt; }
+  .section-heading {
+    font-weight: bold;
+    font-style: italic;
+    margin: 14pt 0 6pt 0;
+  }
+  ul.assist {
+    margin: 0 0 12pt 0;
+    padding-left: 16pt;
+    list-style-type: disc;
+  }
+  ul.assist li { margin-bottom: 6pt; }
+  ul.assist li b { font-weight: bold; }
+  .contact-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18pt 0 14pt 0;
+    border-top: 0.75pt solid #333;
+    border-bottom: 0.75pt solid #333;
+  }
+  .contact-table th, .contact-table td {
+    text-align: center;
+    padding: 6pt 4pt;
+  }
+  .contact-table th {
+    font-weight: bold;
+    border-bottom: 0.5pt solid #ccc;
+  }
+  .signoff { margin-top: 8pt; }
+  .signoff .closing { margin-bottom: 18pt; }
+  .signoff .name { font-weight: normal; }
+  .signoff .title { font-weight: normal; }
+  .signoff .tagline { font-style: italic; }
+  b { font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="logo">
+    <!-- Replace this src with the hosted Permit Solutions logo URL once
+         available. Lob fetches external images at render time. Use HTTPS
+         and a public, high-resolution PNG (300 DPI equivalent). -->
+    <img src="https://permitsolutions.us/logo.png" alt="Permit Solutions Services">
+  </div>
+
+  <div class="date">{{date}}</div>
+
+  <div class="recipient-block">
+    {{owner_name}}<br>
+    {{owner_address_line1}}
+    <div class="case">CASE NUMBER: {{case_number}}</div>
+  </div>
+
+  <p class="salutation">Dear {{first_name}},</p>
+
+  <p>I hope this message finds you well. My name is Victor L. Moreno, and I'm with
+  <b>Permit Solutions Services</b>, a company dedicated to assisting {{jurisdiction}}
+  property owners with permit-related issues. We've come to understand that your
+  property at <b>{{property_address}}</b> may have a violation concerning your
+  <b>{{violation_subject}}</b>. Navigating the permit process can be difficult, and
+  unintentional oversights can happen to the best of us.</p>
+
+  <div class="section-heading">Here's How We Can Assist You:</div>
+  <ul class="assist">
+    <li><b>Expert Guidance:</b> With over 20 years of experience in the construction
+    industry, we specialize in resolving permit issues for fences, windows, doors, and
+    other structures, ensuring your property adheres to {{jurisdiction}}'s regulations.</li>
+    <li><b>Resolution Services:</b> From submitting the correct paperwork to liaising
+    with local authorities, we manage the entire resolution process on your behalf.</li>
+    <li><b>Compliance Assurance:</b> Our team works diligently to address current
+    violations and safeguard against future issues, ensuring long-term compliance.</li>
+  </ul>
+
+  <p><b><i>Act Now to Prevent Further Complications:</i></b> You have <b>90 days</b>
+  to correct the violation(s). The longer permit issues remain unresolved, the greater
+  the risk of significant fines and legal complications that can disrupt your peace
+  of mind and plans. By addressing these issues promptly with Permit Solutions, you
+  can ensure that your property remains safe, legal, and fully compliant.</p>
+
+  <table class="contact-table">
+    <tr>
+      <th>Phone</th>
+      <th>Email</th>
+      <th>Website</th>
+    </tr>
+    <tr>
+      <td>305-600-9422</td>
+      <td>help@permitsolutions.us</td>
+      <td>www.permitsolutions.us</td>
+    </tr>
+  </table>
+
+  <div class="signoff">
+    <div class="closing">Warm regards,</div>
+    <div class="name">Victor L. Moreno</div>
+    <div class="title">Chief Compliance Officer</div>
+    <div class="tagline">"Compliance Made Easy"</div>
+  </div>
+
+</div>
+</body>
+</html>
