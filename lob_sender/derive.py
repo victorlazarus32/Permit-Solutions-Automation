@@ -12,18 +12,40 @@ sources — the address parser in particular tends to need adjustment per city.
 """
 from __future__ import annotations
 
+import base64
 import logging
 import re
 from datetime import date
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 log = logging.getLogger(__name__)
+
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "permit_solutions_logo.png"
+
+
+@lru_cache(maxsize=1)
+def _load_logo_data_uri() -> str:
+    """Read the PNG logo once and return it as a data URI for the letter header."""
+    if not LOGO_PATH.exists():
+        log.warning("Logo file missing at %s — letters will render with a broken image.", LOGO_PATH)
+        return ""
+    encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 # Sources we know how to introduce in the letter copy.
 JURISDICTION_BY_SOURCE = {
     "miami_dade_unincorporated": "Miami-Dade County",
     "homestead": "the City of Homestead",
     # Add new connectors here as you onboard them.
+}
+
+# Spanish equivalents — phrased so they read naturally after "propietarios de ___"
+# and "regulaciones de ___". Caribbean / neutral Latin American Spanish.
+JURISDICTION_ES_BY_SOURCE = {
+    "miami_dade_unincorporated": "el Condado de Miami-Dade",
+    "homestead": "la Ciudad de Homestead",
 }
 
 # Map keyword hits → human-friendly noun used in the letter sentence
@@ -41,6 +63,26 @@ _KEYWORD_TO_SUBJECT = [
     (re.compile(r"\belectrical\b", re.I),               "electrical work"),
 ]
 
+# Spanish translations for each English subject noun. Neutral Caribbean Spanish.
+_SUBJECT_EN_TO_ES = {
+    "fence":            "cerca",
+    "gate":             "portón",
+    "garage door":      "puerta de garaje",
+    "door":             "puerta",
+    "window":           "ventana",
+    "electrical work":  "trabajo eléctrico",
+    "property":         "propiedad",
+}
+
+# Spanish month names (lowercase — the Spanish convention).
+_SPANISH_MONTHS = {
+    1:  "enero",   2:  "febrero", 3:  "marzo",     4:  "abril",
+    5:  "mayo",    6:  "junio",   7:  "julio",     8:  "agosto",
+    9:  "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre",
+}
+
+GENERIC_SALUTATION_ES = "Propietario/a"
+
 # Generic / corporate name fragments — when we see these in owner_full_name,
 # we don't try to extract a "first name" for the salutation.
 _NON_PERSONAL_TOKENS = re.compile(
@@ -55,23 +97,28 @@ GENERIC_SALUTATION = "Property Owner"
 
 # ---------- Derived fields ----------
 
-def derive_violation_subject(matched_keywords: str | None,
-                             alleged_violation: str | None) -> str:
-    """
-    Build the noun phrase that goes after "concerning your ___".
-    Searches matched_keywords first (precise), then falls back to the full
-    alleged_violation text. Combines multiple subjects with " and ".
-    """
+def _match_subjects(matched_keywords: str | None,
+                    alleged_violation: str | None) -> list[str]:
+    """Return the ordered list of canonical English subjects that matched."""
     haystack_parts = [matched_keywords or "", alleged_violation or ""]
     haystack = " ".join(haystack_parts)
     if not haystack.strip():
-        return "property"
+        return []
 
     found: list[str] = []
     for pattern, subject in _KEYWORD_TO_SUBJECT:
         if pattern.search(haystack) and subject not in found:
             found.append(subject)
+    return found
 
+
+def derive_violation_subject(matched_keywords: str | None,
+                             alleged_violation: str | None) -> str:
+    """
+    Build the noun phrase that goes after "concerning your ___".
+    Combines multiple subjects with " and ".
+    """
+    found = _match_subjects(matched_keywords, alleged_violation)
     if not found:
         return "property"
     if len(found) == 1:
@@ -81,39 +128,51 @@ def derive_violation_subject(matched_keywords: str | None,
     return ", ".join(found[:-1]) + f", and {found[-1]}"
 
 
-def derive_first_name(owner_full_name: str | None) -> str:
-    """
-    Pull a friendly salutation token from the owner name field.
-    Returns 'Property Owner' for LLCs, trusts, multi-owner deeds, or anything
-    we can't confidently address by first name.
-    """
+def derive_violation_subject_es(matched_keywords: str | None,
+                                alleged_violation: str | None) -> str:
+    """Spanish mirror of derive_violation_subject — joined with ' y '."""
+    found = _match_subjects(matched_keywords, alleged_violation)
+    translated = [_SUBJECT_EN_TO_ES.get(s, s) for s in found] or ["propiedad"]
+    if len(translated) == 1:
+        return translated[0]
+    if len(translated) == 2:
+        return f"{translated[0]} y {translated[1]}"
+    return ", ".join(translated[:-1]) + f" y {translated[-1]}"
+
+
+def _first_name_or_none(owner_full_name: str | None) -> str | None:
+    """Return the first-name token, or None when the owner is corporate/multi-owner."""
     if not owner_full_name:
-        return GENERIC_SALUTATION
-
+        return None
     name = owner_full_name.strip()
-
-    # Multi-owner deeds usually contain '/', ',', '&' or ' AND '
-    # Miami-Dade uses ',' (e.g. "MORITZ ESSER, YUDIT VIRGINIA PINA RODRIGUEZ")
-    # Homestead uses '/' (e.g. "Yamil Horruitinel / Andres F Salazar")
     if "/" in name or "," in name or "&" in name or " AND " in name.upper():
-        return GENERIC_SALUTATION
-
-    # Corporate / non-person owners
+        return None
     if _NON_PERSONAL_TOKENS.search(name):
-        return GENERIC_SALUTATION
+        return None
+    token = name.split()[0].strip(",.;:")
+    return token or None
 
-    # Take the first whitespace-separated token, strip trailing punctuation
-    first_token = name.split()[0].strip(",.;:")
-    if not first_token:
-        return GENERIC_SALUTATION
-    return first_token
+
+def derive_first_name(owner_full_name: str | None) -> str:
+    """Friendly salutation token; falls back to 'Property Owner' for corporate/multi-owner."""
+    return _first_name_or_none(owner_full_name) or GENERIC_SALUTATION
+
+
+def derive_first_name_es(owner_full_name: str | None) -> str:
+    """Spanish mirror; falls back to 'Propietario/a' for corporate/multi-owner."""
+    return _first_name_or_none(owner_full_name) or GENERIC_SALUTATION_ES
 
 
 def format_letter_date(d: date | None = None) -> str:
     """e.g. 'April 22, 2026'  (no leading zero on the day on most platforms)."""
     d = d or date.today()
-    # %-d is not portable to Windows; build it manually for safety
     return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
+def format_letter_date_es(d: date | None = None) -> str:
+    """e.g. '23 de abril de 2026' — Spanish long-form date."""
+    d = d or date.today()
+    return f"{d.day} de {_SPANISH_MONTHS[d.month]} de {d.year}"
 
 
 # ---------- Address parsing ----------
@@ -238,23 +297,28 @@ def derive_for_row(row: dict[str, Any], today: date | None = None) -> dict[str, 
     if to_address:
         to_address = {"name": owner_name, **to_address}
 
-    # Jurisdiction (used in letter copy)
-    jurisdiction = JURISDICTION_BY_SOURCE.get(
-        row.get("source", ""), "your local jurisdiction"
-    )
+    # Jurisdiction (used in letter copy — both sides)
+    source_key = row.get("source", "")
+    jurisdiction    = JURISDICTION_BY_SOURCE.get(source_key, "your local jurisdiction")
+    jurisdiction_es = JURISDICTION_ES_BY_SOURCE.get(source_key, "su jurisdicción local")
+
+    matched = row.get("matched_keywords")
+    alleged = row.get("alleged_violation")
 
     merge = {
         "date":                 format_letter_date(today),
+        "date_es":              format_letter_date_es(today),
         "owner_name":           owner_name,  # cleaned, matches `to.name`
         "owner_address_line1":  (row.get("owner_mailing_address") or "").strip(),
         "case_number":          str(row.get("case_number") or ""),
         "first_name":           derive_first_name(row.get("owner_full_name")),
+        "first_name_es":        derive_first_name_es(row.get("owner_full_name")),
         "property_address":     (row.get("property_address") or "").strip(),
-        "violation_subject":    derive_violation_subject(
-                                    row.get("matched_keywords"),
-                                    row.get("alleged_violation"),
-                                ),
+        "violation_subject":    derive_violation_subject(matched, alleged),
+        "violation_subject_es": derive_violation_subject_es(matched, alleged),
         "jurisdiction":         jurisdiction,
+        "jurisdiction_es":      jurisdiction_es,
+        "logo_src":             _load_logo_data_uri(),
     }
 
     return {

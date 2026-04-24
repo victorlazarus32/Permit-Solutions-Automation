@@ -188,7 +188,9 @@ def send_batch(
     template_id     = os.environ.get("LOB_TEMPLATE_ID", "").strip() or None
     from_address_id = os.environ.get("LOB_FROM_ADDRESS_ID", "").strip()
     color           = os.environ.get("LOB_COLOR", "true").lower() == "true"
-    double_sided    = os.environ.get("LOB_DOUBLE_SIDED", "false").lower() == "true"
+    # Letter template is two pages (EN front, ES back). Default to duplex so
+    # both sides land on one physical sheet rather than two.
+    double_sided    = os.environ.get("LOB_DOUBLE_SIDED", "true").lower() == "true"
     mail_type       = os.environ.get("LOB_MAIL_TYPE", "usps_first_class")
 
     if not dry_run:
