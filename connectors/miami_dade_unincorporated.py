@@ -123,8 +123,8 @@ def fetch_export(start: date, end: date, headless: bool = True) -> Path:
         page.get_by_label("Commissioner District").select_option(label=DISTRICT)
 
         log.info("Setting date range %s → %s", start, end)
-        page.get_by_label("Start Date").fill(start.strftime("%%Y-%%m-%%d"))
-        page.get_by_label("End Date").fill(end.strftime("%%Y-%%m-%%d"))
+        page.get_by_label("Start Date").fill(start.strftime("%Y-%m-%d"))
+        page.get_by_label("End Date").fill(end.strftime("%Y-%m-%d"))
 
         log.info("Submitting form …")
         page.get_by_role("button", name="Submit").click()
@@ -135,9 +135,9 @@ def fetch_export(start: date, end: date, headless: bool = True) -> Path:
 
         log.info("Triggering Export to Excel download …")
         with page.expect_download(timeout=60_000) as dl_info:
-            # The button text on the live site is "Export to Excel" — adjust
-            # this selector if the label is different.
-            page.get_by_role("button", name="Export to Excel").click()
+            # On the results page this control is rendered as an <a> link,
+            # not a <button>. get_by_role("link", ...) matches either.
+            page.get_by_role("link", name="Export to Excel").click()
         download = dl_info.value
 
         download.save_as(archive_path)
