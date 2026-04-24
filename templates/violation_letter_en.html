@@ -44,66 +44,65 @@
     margin: 0;
     padding: 0;
     font-family: Helvetica, Arial, sans-serif;
-    font-size: 11pt;
-    line-height: 1.45;
+    font-size: 10.5pt;
+    line-height: 1.35;
     color: #111;
   }
   .page {
-    /* Lob recommends content area be inside an additional 0.5" safe zone
-       beyond the page margin — total ~1in from each edge for the printable
-       safe area. */
-    padding: 0.5in 0.5in 0.5in 0.5in;
+    /* The @page margin already gives us a 0.5" safe zone; no extra padding
+       so the body fits on one sheet per language. */
+    padding: 0;
   }
   .logo {
     text-align: center;
-    margin-bottom: 0.4in;
+    margin-bottom: 0.15in;
   }
   .logo img {
-    height: 0.9in;
+    height: 0.6in;
   }
   .date {
     font-style: italic;
-    margin-bottom: 0.25in;
+    margin-bottom: 0.12in;
   }
   .recipient-block {
-    margin-bottom: 0.25in;
+    margin-bottom: 0.15in;
   }
   .recipient-block .case {
     font-weight: bold;
     font-style: italic;
-    margin-top: 6pt;
+    margin-top: 4pt;
   }
-  p { margin: 0 0 10pt 0; }
-  .salutation { margin-bottom: 10pt; }
+  p { margin: 0 0 7pt 0; }
+  .salutation { margin-bottom: 7pt; }
   .section-heading {
     font-weight: bold;
     font-style: italic;
-    margin: 14pt 0 6pt 0;
+    margin: 9pt 0 4pt 0;
   }
   ul.assist {
-    margin: 0 0 12pt 0;
+    margin: 0 0 8pt 0;
     padding-left: 16pt;
     list-style-type: disc;
   }
-  ul.assist li { margin-bottom: 6pt; }
+  ul.assist li { margin-bottom: 4pt; }
   ul.assist li b { font-weight: bold; }
   .contact-table {
     width: 100%;
     border-collapse: collapse;
-    margin: 18pt 0 14pt 0;
+    margin: 10pt 0 8pt 0;
     border-top: 0.75pt solid #333;
     border-bottom: 0.75pt solid #333;
   }
   .contact-table th, .contact-table td {
     text-align: center;
-    padding: 6pt 4pt;
+    padding: 4pt 3pt;
   }
   .contact-table th {
     font-weight: bold;
     border-bottom: 0.5pt solid #ccc;
   }
-  .signoff { margin-top: 8pt; }
-  .signoff .closing { margin-bottom: 18pt; }
+  .signoff { margin-top: 6pt; }
+  .signoff .closing { margin-bottom: 10pt; }
   .signoff .name { font-weight: normal; }
   .signoff .title { font-weight: normal; }
   .signoff .tagline { font-style: italic; }
@@ -131,7 +130,7 @@
     <div class="case">CASE NUMBER: {{case_number}}</div>
   </div>
 
-  <p class="salutation">Dear {{first_name}},</p>
+  <p class="salutation">Hello {{first_name}},</p>
 
   <p>I hope this message finds you well. My name is Victor L. Moreno, and I'm with
   <b>Permit Solutions Services</b>, a company dedicated to assisting {{jurisdiction}}
@@ -195,7 +194,7 @@
     <div class="case">NÚMERO DE CASO: {{case_number}}</div>
   </div>
 
-  <p class="salutation">Estimado/a {{first_name_es}},</p>
+  <p class="salutation">Hola {{first_name_es}},</p>
 
   <p>Espero que esta carta le encuentre bien. Mi nombre es Victor L. Moreno, y represento a
   <b>Permit Solutions Services</b>, una compañía dedicada a ayudar a los propietarios de

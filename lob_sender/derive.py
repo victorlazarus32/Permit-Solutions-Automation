@@ -140,27 +140,44 @@ def derive_violation_subject_es(matched_keywords: str | None,
     return ", ".join(translated[:-1]) + f" y {translated[-1]}"
 
 
-def _first_name_or_none(owner_full_name: str | None) -> str | None:
-    """Return the first-name token, or None when the owner is corporate/multi-owner."""
+def _first_owner_name(owner_full_name: str | None) -> str | None:
+    """
+    Return just the first owner when the field holds multiple (split on / , &
+    or the word 'and'). e.g. 'Mailen Ramos / Yosbel Hechevarria' -> 'Mailen Ramos'.
+    """
     if not owner_full_name:
         return None
-    name = owner_full_name.strip()
-    if "/" in name or "," in name or "&" in name or " AND " in name.upper():
-        return None
-    if _NON_PERSONAL_TOKENS.search(name):
-        return None
-    token = name.split()[0].strip(",.;:")
-    return token or None
+    parts = re.split(r"\s*[/&,]\s*|\s+AND\s+", owner_full_name.strip(),
+                     maxsplit=1, flags=re.I)
+    first = (parts[0] if parts else "").strip()
+    return first or None
 
 
 def derive_first_name(owner_full_name: str | None) -> str:
-    """Friendly salutation token; falls back to 'Property Owner' for corporate/multi-owner."""
-    return _first_name_or_none(owner_full_name) or GENERIC_SALUTATION
+    """
+    Return the token to greet the client by. Order of preference:
+      1. First-name token of the first owner (e.g. 'Mailen Ramos / ...' -> 'Mailen')
+      2. Full entity name for LLCs/trusts (e.g. 'OMEGA INV LLC')
+      3. 'Property Owner' when nothing usable is available
+    """
+    first_owner = _first_owner_name(owner_full_name)
+    if not first_owner:
+        return GENERIC_SALUTATION
+    if _NON_PERSONAL_TOKENS.search(first_owner):
+        return first_owner  # entity name, use whole thing
+    token = first_owner.split()[0].strip(",.;:")
+    return token or first_owner
 
 
 def derive_first_name_es(owner_full_name: str | None) -> str:
-    """Spanish mirror; falls back to 'Propietario/a' for corporate/multi-owner."""
-    return _first_name_or_none(owner_full_name) or GENERIC_SALUTATION_ES
+    """Spanish mirror — same logic but Spanish fallback for missing names."""
+    first_owner = _first_owner_name(owner_full_name)
+    if not first_owner:
+        return GENERIC_SALUTATION_ES
+    if _NON_PERSONAL_TOKENS.search(first_owner):
+        return first_owner
+    token = first_owner.split()[0].strip(",.;:")
+    return token or first_owner
 
 
 def format_letter_date(d: date | None = None) -> str:

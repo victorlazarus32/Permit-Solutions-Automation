@@ -14,6 +14,7 @@ venv/
 # Generated data
 data/*.db
 data/*.txt
+data/.morning_run.lock
 audit/*/
 inbox/*/*.xls
 inbox/*/*.xlsx
