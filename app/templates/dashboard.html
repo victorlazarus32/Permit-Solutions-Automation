@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1>Operator Console</h1>
+  <p class="hero-sub">{{ today }}</p>
+</section>
+
+{% if task.running and task.kind == 'send' %}
+<section class="transmit-banner" id="transmit-banner" data-running="1">
+  <div class="transmit-beacon">
+    <span class="ring r1"></span>
+    <span class="ring r2"></span>
+    <span class="ring r3"></span>
+    <span class="core"></span>
+  </div>
+  <div class="transmit-text">
+    <div class="transmit-title">TRANSMITTING LETTERS</div>
+    <div class="transmit-sub" id="transmit-sub">Connecting to Lob… stay on this page.</div>
+    <div class="transmit-bar"><span id="transmit-fill" style="width: 0%;"></span></div>
+  </div>
+  <div class="transmit-counter" id="transmit-counter">
+    <div class="tc-num"><span id="tc-done">0</span><span class="tc-slash">/</span><span id="tc-total">…</span></div>
+    <div class="tc-label">letters mailed</div>
+  </div>
+</section>
+{% elif task.running %}
+<section class="task-banner">
+  <strong>Working on it.</strong> <span>{{ task.kind }} started at {{ task.started_at }}. The page auto-refreshes every 5 seconds while it runs.</span>
+</section>
+{% elif task.error %}
+<section class="task-banner task-error">
+  <strong>Last task failed.</strong> <code>{{ task.error }}</code>
+</section>
+{% elif task.result %}
+<section class="task-banner task-success">
+  <strong>Last task finished.</strong>
+  {% if task.kind == 'scrape' %}
+    Pulled {{ task.result.inserted }} new cases ({{ task.result.updated }} updated).
+  {% elif task.kind == 'homestead' %}
+    Processed {{ task.result.files }} file(s); {{ task.result.inserted }} new cases.
+  {% elif task.kind == 'send' %}
+    Mailed {{ task.result.sent }} letters ({{ task.result.skipped }} skipped, {{ task.result.failed }} failed).
+  {% endif %}
+</section>
+{% endif %}
+
+<h2 class="section-heading">Conversion Funnel</h2>
+<section class="funnel">
+
+  <div class="funnel-card stage-mailed count-up delay-1">
+    <div class="funnel-label">Letters Mailed</div>
+    <div class="funnel-value">{{ funnel.mailed }}</div>
+    <div class="funnel-foot">total to date</div>
+    <div class="conv-bar"><span style="width: 100%;"></span></div>
+  </div>
+
+  <div class="funnel-card stage-call count-up delay-2">
+    <div class="funnel-label">Inbound Contacts</div>
+    <div class="funnel-value">{{ funnel.calls }}</div>
+    <div class="funnel-foot">{{ funnel.pct_call }}% reply rate</div>
+    <div class="conv-bar"><span style="width: {{ funnel.pct_call|round|int }}%;"></span></div>
+  </div>
+
+  <div class="funnel-card stage-contract count-up delay-3">
+    <div class="funnel-label">Signed Contracts</div>
+    <div class="funnel-value">{{ funnel.contracts }}</div>
+    <div class="funnel-foot">{{ funnel.pct_contract }}% close from mailed</div>
+    <div class="conv-bar"><span style="width: {{ funnel.pct_contract|round|int }}%;"></span></div>
+  </div>
+
+  <div class="funnel-card stage-revenue count-up delay-4">
+    <div class="funnel-label">Revenue Booked</div>
+    <div class="funnel-value">${{ '{:,.0f}'.format(funnel.revenue) }}</div>
+    <div class="funnel-foot">{% if funnel.contracts %}${{ '{:,.0f}'.format(funnel.revenue / funnel.contracts) }} avg per contract{% else %}no contracts yet{% endif %}</div>
+    <div class="conv-bar"><span style="width: {{ funnel.pct_close|round|int }}%;"></span></div>
+  </div>
+
+</section>
+
+<h2 class="section-heading">Trends</h2>
+<section class="charts-row">
+  <div class="chart-card">
+    <h3 class="chart-title">Leads Pulled (last 30 days)</h3>
+    <canvas id="chartLeads"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3 class="chart-title">Revenue Booked (last 90 days)</h3>
+    <canvas id="chartRevenue"></canvas>
+  </div>
+</section>
+
+{% if overdue %}
+<h2 class="section-heading">Action Items</h2>
+<section class="overdue-list">
+  {% for o in overdue %}
+  <a href="{{ url_for('lead_detail', source=o.source, case_number=o.case_number) }}" class="overdue-item">
+    <span class="score-badge score-{{ o.lead_temperature }}">{{ o.lead_score }}</span>
+    <div class="overdue-body">
+      <div class="overdue-line1">
+        <span class="mono">{{ o.case_number }}</span>
+        {% if o.property_address %}· {{ o.property_address }}{% endif %}
+        {% if o.owner_full_name %}· <span class="cell-narrative">{{ o.owner_full_name }}</span>{% endif %}
+      </div>
+      <div class="overdue-line2">{{ o.next_action or 'Follow up' }} — <span class="mono">{{ o.next_action_at }}</span></div>
+    </div>
+    {% if o.disposition %}<span class="status disp-{{ o.disposition }}">{{ o.disposition.replace('_',' ') }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</section>
+{% endif %}
+
+<h2 class="section-heading">System State</h2>
+<section class="stat-strip">
+  <div class="stat">
+    <div class="stat-label">Cases In System</div>
+    <div class="stat-value">{{ totals.total }}</div>
+    <div class="stat-foot">
+      {% for src, n in by_source.items() %}{{ src.replace('_',' ').title() }}: {{ n }}{% if not loop.last %} &middot; {% endif %}{% endfor %}
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Ready To Mail</div>
+    <div class="stat-value">{{ totals.ready }}</div>
+    <div class="stat-foot"><a href="{{ url_for('queue') }}">Open queue &rarr;</a></div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Already Mailed</div>
+    <div class="stat-value">{{ totals.sent }}</div>
+    <div class="stat-foot"><a href="{{ url_for('sent') }}">Sent letters &rarr;</a></div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Last Scrape</div>
+    <div class="stat-value">{{ last_scrape or '—' }}</div>
+    <div class="stat-foot">{% if last_send %}Last send: {{ last_send }}{% else %}No letters mailed yet{% endif %}</div>
+  </div>
+</section>
+
+<h2 class="section-heading">Daily Actions</h2>
+
+<section class="action-grid">
+
+  <form method="POST" action="{{ url_for('action_scrape') }}" class="action-card">
+    <h3>1. Pull New Miami-Dade Cases</h3>
+    <p>Scrapes the Miami-Dade portal for code violations opened since the last run. Filters to your trade keywords and saves them to the system.</p>
+    <button type="submit" {% if task.running %}disabled{% endif %}>Pull New Cases</button>
+  </form>
+
+  <form method="POST" action="{{ url_for('action_homestead_tyler') }}" class="action-card">
+    <h3>2. Pull New Homestead Cases</h3>
+    <p>Pulls new permit and zoning violations from the City of Homestead's portal. Only Notices of Violation that match your trade scope are saved. Skips abatement, animal, sanitation, ticket, and unsafe structure cases.</p>
+    <button type="submit" {% if task.running %}disabled{% endif %}>Pull Homestead</button>
+  </form>
+
+  <form method="POST" action="{{ url_for('action_homestead') }}" class="action-card">
+    <h3>3. Process PRR Files</h3>
+    <p>Ingests any PRR Excel files waiting in the inbox. <a href="{{ url_for('upload_prr') }}">Upload a new file</a> first if needed.</p>
+    <button type="submit" {% if task.running %}disabled{% endif %}>Process PRR</button>
+  </form>
+
+  <form method="POST" action="{{ url_for('action_send') }}" class="action-card action-card-send" id="send-form">
+    <h3>4. Mail Today's Letters</h3>
+    {% if not lob_ok %}
+    <p class="lob-blocker">
+      <strong>Lob is not configured yet.</strong> {{ lob_reason }}
+      Open <a href="{{ url_for('settings') }}">Settings</a> to see exactly what is missing.
+      The button below is locked until that is fixed.
+    </p>
+    {% else %}
+    <p>Sends every ready-to-mail letter through Lob. Type <code>YES</code> in capitals to authorize. The system never double-mails any case.</p>
+    {% endif %}
+    <input type="text" name="confirm" placeholder="Type YES to authorize" autocomplete="off" {% if lob_ok %}required{% else %}disabled{% endif %}>
+    <button type="submit" {% if task.running or not lob_ok %}disabled{% endif %} class="btn-danger" id="send-btn">
+      <span class="send-btn-default">{% if not lob_ok %}Locked: configure Lob first{% else %}Mail {{ totals.ready }} Letter{% if totals.ready != 1 %}s{% endif %}{% endif %}</span>
+      <span class="send-btn-active" hidden>
+        <span class="btn-beacon"><span class="ring r1"></span><span class="ring r2"></span><span class="core"></span></span>
+        TRANSMITTING…
+      </span>
+    </button>
+  </form>
+
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+
+{# ===== Send button: instant beacon transformation on submit ===== #}
+<script>
+(function() {
+  var form = document.getElementById('send-form');
+  var btn  = document.getElementById('send-btn');
+  if (!form || !btn) return;
+  form.addEventListener('submit', function(e) {
+    var confirmInput = form.querySelector('input[name="confirm"]');
+    if (confirmInput && confirmInput.value !== 'YES') return;  // browser shows required validation
+    btn.classList.add('btn-transmitting');
+    var d = btn.querySelector('.send-btn-default');
+    var a = btn.querySelector('.send-btn-active');
+    if (d) d.hidden = true;
+    if (a) a.hidden = false;
+    btn.disabled = true;
+    document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  });
+})();
+</script>
+
+{# ===== Transmission banner: live progress polling ===== #}
+{% if task.running %}
+<script>
+(function() {
+  var banner = document.getElementById('transmit-banner');
+  var sub    = document.getElementById('transmit-sub');
+  var done   = document.getElementById('tc-done');
+  var total  = document.getElementById('tc-total');
+  var fill   = document.getElementById('transmit-fill');
+
+  var fellowAutoRefresh = setTimeout(function() { window.location.reload(); }, 1500);
+
+  function poll() {
+    fetch('/api/task-status')
+      .then(function(r){ return r.json(); })
+      .then(function(s) {
+        if (!s.running) {
+          // Task finished — let the page reload pick up final state.
+          window.location.reload();
+          return;
+        }
+        if (banner && s.progress) {
+          var p = s.progress;
+          if (typeof p.done === 'number')  done.textContent  = p.done;
+          if (typeof p.total === 'number') total.textContent = p.total;
+          if (p.total && fill) {
+            var pct = Math.min(100, Math.round((p.done / p.total) * 100));
+            fill.style.width = pct + '%';
+          }
+          if (sub) {
+            if (p.stage === 'starting') {
+              sub.textContent = 'Preparing the queue...';
+            } else if (p.case_number) {
+              sub.textContent = 'Now: case ' + p.case_number + (p.address ? ' · ' + p.address : '');
+            }
+          }
+        }
+        clearTimeout(fellowAutoRefresh);
+        setTimeout(poll, 1500);
+      })
+      .catch(function() { clearTimeout(fellowAutoRefresh); setTimeout(poll, 3000); });
+  }
+  setTimeout(poll, 600);
+})();
+</script>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script id="leads-data" type="application/json">{{ daily|tojson }}</script>
+<script id="rev-data" type="application/json">{{ revenue|tojson }}</script>
+<script>
+(function() {
+  if (typeof Chart === 'undefined') return;
+
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#64748b';
+  Chart.defaults.borderColor = '#e7e2d6';
+
+  function commonOpts(ctx) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 14 } },
+        y: { beginAtZero: true, grid: { color: '#eef1f8' }, ticks: { precision: 0 } },
+      },
+    };
+  }
+
+  function makeGradient(ctx, top, bottom) {
+    var g = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+    g.addColorStop(0, top);
+    g.addColorStop(1, bottom);
+    return g;
+  }
+
+  /* Leads-per-day */
+  var leads = JSON.parse(document.getElementById('leads-data').textContent || '[]');
+  var leadsCtx = document.getElementById('chartLeads').getContext('2d');
+  new Chart(leadsCtx, {
+    type: 'bar',
+    data: {
+      labels: leads.map(function(r){ return r.d.slice(5); }),
+      datasets: [{
+        data: leads.map(function(r){ return r.n; }),
+        backgroundColor: makeGradient(leadsCtx, 'rgba(252,132,24,0.95)', 'rgba(244,165,61,0.45)'),
+        borderRadius: 6,
+        barThickness: 'flex',
+        maxBarThickness: 18,
+      }],
+    },
+    options: commonOpts(leadsCtx),
+  });
+
+  /* Revenue trend */
+  var rev = JSON.parse(document.getElementById('rev-data').textContent || '[]');
+  var revCtx = document.getElementById('chartRevenue').getContext('2d');
+  new Chart(revCtx, {
+    type: 'line',
+    data: {
+      labels: rev.map(function(r){ return r.d.slice(5); }),
+      datasets: [{
+        data: rev.map(function(r){ return r.rev; }),
+        borderColor: '#24303C',
+        backgroundColor: makeGradient(revCtx, 'rgba(252,132,24,0.30)', 'rgba(252,132,24,0)'),
+        fill: true,
+        tension: 0.32,
+        pointRadius: 3,
+        pointBackgroundColor: '#FC8418',
+        pointBorderColor: '#24303C',
+        pointBorderWidth: 1.5,
+        pointHoverRadius: 6,
+        borderWidth: 2.5,
+      }],
+    },
+    options: Object.assign(commonOpts(revCtx), {
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, grid: { color: '#eef1f8' }, ticks: { callback: function(v) { return '$' + v.toLocaleString(); } } },
+      },
+    }),
+  });
+})();
+</script>
+{% endblock %}

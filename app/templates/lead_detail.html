@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}{{ v.case_number }} | Lead{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('dashboard') }}">Dashboard</a> · <a href="{{ url_for('queue') }}">Queue</a> · <span class="mono">{{ v.case_number }}</span></p>
+      <h1>{{ v.property_address or '(no address)' }}</h1>
+      <p class="hero-sub">
+        <span class="mono">{{ v.case_number }}</span>
+        &nbsp;·&nbsp; {{ v.source.replace('_',' ').title() }}
+        {% if v.open_date %}&nbsp;·&nbsp; opened {{ v.open_date }}{% endif %}
+      </p>
+    </div>
+    <div class="lead-hero-actions">
+      {% if v.lob_status %}
+        <span class="status status-{{ v.lob_status|lower|replace('_','-') }}">{{ v.lob_status }}</span>
+      {% else %}
+        <span class="status status-unknown">Not yet mailed</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<div class="lead-grid">
+
+  {# ===== LEFT: case details + letter status ===== #}
+  <div class="lead-col">
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Property &amp; Owner</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Owner</span><span class="v">{{ v.owner_full_name or '—' }}</span></div>
+        <div class="kv"><span class="k">Mailing</span><span class="v">{{ v.owner_mailing_address or '—' }}</span></div>
+        <div class="kv"><span class="k">Folio</span><span class="v mono">{{ v.folio_number or '—' }}</span></div>
+        {% if v.violator and v.violator != v.owner_full_name %}
+        <div class="kv"><span class="k">Violator</span><span class="v">{{ v.violator }}</span></div>
+        {% endif %}
+        <div class="kv"><span class="k">Inspector</span><span class="v">{{ v.inspector or '—' }}</span></div>
+      </div>
+    </div>
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Violation</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Type</span><span class="v">{{ v.case_type or '—' }}</span></div>
+        <div class="kv"><span class="k">Matched</span><span class="v">
+          {% if v.matched_keywords %}
+            {% for kw in v.matched_keywords.split(',') %}<span class="kw-chip">{{ kw }}</span>{% endfor %}
+          {% else %}—{% endif %}
+        </span></div>
+        <div class="kv"><span class="k">Open Date</span><span class="v">{{ v.open_date or '—' }}</span></div>
+        {% if v.close_date %}<div class="kv"><span class="k">Closed</span><span class="v">{{ v.close_date }}</span></div>{% endif %}
+      </div>
+      {% if v.alleged_violation %}
+      <div class="violation-block">
+        <span class="vb-label">Alleged Violation</span>
+        <p>{{ v.alleged_violation }}</p>
+      </div>
+      {% endif %}
+      {% if v.comments %}
+      <div class="violation-block">
+        <span class="vb-label">Comments</span>
+        <p>{{ v.comments }}</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Letter Status</h3>
+      {% if v.lob_letter_id %}
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Letter ID</span><span class="v mono">{{ v.lob_letter_id }}</span></div>
+        <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ v.lob_status|lower|replace('_','-') }}">{{ v.lob_status }}</span></span></div>
+        <div class="kv"><span class="k">Mailed</span><span class="v">{{ v.lob_mailed_at or '—' }}</span></div>
+        {% if v.lob_delivered_at %}<div class="kv"><span class="k">Delivered</span><span class="v">{{ v.lob_delivered_at }}</span></div>{% endif %}
+        <div class="kv"><span class="k">Last Event</span><span class="v">{{ v.lob_last_event_at or '—' }}</span></div>
+      </div>
+      {% else %}
+      <p class="empty-inline">This case has not been mailed yet. It is in the Letter Queue.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ===== RIGHT: timeline + intakes ===== #}
+  <div class="lead-col">
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Lead Intakes ({{ intakes|length }})</h3>
+      {% if intakes %}
+      {% for it in intakes %}
+      <div class="intake-summary intake-row review-{{ it.senior_review_status }}">
+        <div class="intake-summary-head">
+          <span class="score-badge score-{{ it.lead_temperature }}">{{ it.lead_score }}</span>
+          <div class="intake-summary-meta">
+            <div><span class="status temp-{{ it.lead_temperature }}">{{ (it.lead_temperature or '?')|upper }}</span>
+                 <span class="status review-status review-{{ it.senior_review_status }}">{{ it.senior_review_status|upper }}</span>
+                 {% if it.disposition %}<span class="status disp-{{ it.disposition }}">{{ it.disposition.replace('_',' ') }}</span>{% endif %}
+            </div>
+            <div class="intake-summary-sub">
+              <span class="mono">{{ it.call_at }}</span>
+              {% if it.caller_name %}· {{ it.caller_name }}{% endif %}
+              {% if it.caller_phone %}· <span class="mono">{{ it.caller_phone }}</span>{% endif %}
+              {% if it.contract_value_usd %}· <span style="color: var(--emerald); font-weight: 600;">${{ '{:,.0f}'.format(it.contract_value_usd) }}</span>{% endif %}
+            </div>
+          </div>
+          {% if it.senior_review_status == 'pending' %}
+          <form method="POST" action="{{ url_for('action_review_intake', intake_id=it.id) }}" class="inline-review">
+            <input type="hidden" name="reviewer" value="Victor">
+            <button type="submit" name="decision" value="approved" class="btn-approve">Approve</button>
+            <button type="submit" name="decision" value="rejected" class="btn-reject">Reject</button>
+          </form>
+          {% endif %}
+        </div>
+        {% if it.operator_notes %}
+        <div class="intake-summary-notes">
+          <span class="vb-label">Notes</span>
+          <p>{{ it.operator_notes }}</p>
+        </div>
+        {% endif %}
+        {% if it.next_action %}
+        <div class="intake-summary-next">
+          Next: {{ it.next_action }}{% if it.next_action_at %} <span class="mono">({{ it.next_action_at }})</span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="empty-inline">No intake recorded yet for this case.</p>
+      {% endif %}
+      <a class="btn btn-secondary lead-card-cta" href="{{ url_for('pipeline') }}#new-intake">Log a new intake</a>
+    </div>
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Quick Event</h3>
+      <p class="lead-card-desc">Log a fast touchpoint without filling the full intake (left voicemail, sent text, etc).</p>
+      <form method="POST" action="{{ url_for('action_log_event') }}" class="quick-event-form">
+        <input type="hidden" name="case_key" value="{{ v.source }}|{{ v.case_number }}">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="qe_event_type">Type</label>
+            <select name="event_type" id="qe_event_type" required>
+              <option value="call">Call</option>
+              <option value="text">Text</option>
+              <option value="email">Email</option>
+              <option value="meeting">Meeting</option>
+              <option value="contract">Contract signed</option>
+              <option value="declined">Declined</option>
+              <option value="no_response">No response</option>
+              <option value="note">Note</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="qe_occurred_at">When</label>
+            <input type="date" name="occurred_at" id="qe_occurred_at" value="{{ today_iso }}">
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-field">
+            <label for="qe_notes">Notes</label>
+            <textarea name="notes" id="qe_notes" placeholder="Quick context..."></textarea>
+          </div>
+        </div>
+        <button type="submit" class="btn-secondary">Log Event</button>
+      </form>
+    </div>
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Event Timeline ({{ events|length }})</h3>
+      {% if events %}
+      <ol class="timeline">
+        {% for e in events %}
+        <li class="timeline-item event-{{ e.event_type }}">
+          <span class="timeline-dot"></span>
+          <div class="timeline-body">
+            <div class="timeline-head">
+              <span class="status event-{{ e.event_type }}">{{ e.event_type.replace('_',' ') }}</span>
+              <span class="mono timeline-date">{{ e.occurred_at }}</span>
+              {% if e.contract_value %}<span class="mono" style="color: var(--emerald); font-weight: 600;">${{ '{:,.0f}'.format(e.contract_value) }}</span>{% endif %}
+            </div>
+            {% if e.contact_name or e.contact_phone or e.contact_email %}
+            <div class="timeline-contact">
+              {% if e.contact_name %}{{ e.contact_name }}{% endif %}
+              {% if e.contact_phone %} · <span class="mono">{{ e.contact_phone }}</span>{% endif %}
+              {% if e.contact_email %} · <span class="mono">{{ e.contact_email }}</span>{% endif %}
+            </div>
+            {% endif %}
+            {% if e.notes %}<p class="timeline-notes">{{ e.notes }}</p>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="empty-inline">No events yet. The quick event form above is the fastest way to log one.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

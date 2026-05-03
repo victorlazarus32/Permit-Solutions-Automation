@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Letter Queue{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Letter Queue</h1>
+  <p class="hero-sub">{{ count }} letter{% if count != 1 %}s{% endif %} ready to mail. Sorted newest first.</p>
+</section>
+
+{% if rows %}
+<table class="data-table sortable">
+  <thead>
+    <tr>
+      <th data-sort="source">Source</th>
+      <th data-sort="case">Case #</th>
+      <th data-sort="open">Open Date</th>
+      <th data-sort="addr">Property Address</th>
+      <th data-sort="owner">Owner</th>
+      <th>Matched Keywords</th>
+      <th>Violation Summary</th>
+      <th class="col-actions">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.source.replace('_', ' ') }}</td>
+      <td><a class="mono case-link" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">{{ r.case_number }}</a></td>
+      <td>{{ r.open_date or '' }}</td>
+      <td>{{ r.property_address or '' }}</td>
+      <td>{{ r.owner_full_name or '' }}</td>
+      <td>
+        {% if r.matched_keywords %}
+          {% for kw in r.matched_keywords.split(',') %}<span class="kw-chip">{{ kw }}</span>{% endfor %}
+        {% endif %}
+      </td>
+      <td class="cell-narrative">{{ (r.alleged_violation or '')[:200] }}{% if r.alleged_violation and r.alleged_violation|length > 200 %}...{% endif %}</td>
+      <td class="col-actions">
+        <a class="btn btn-secondary btn-tiny" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">Open</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No letters are queued. Pull new cases from the dashboard to populate the queue.</p>
+{% endif %}
+{% endblock %}

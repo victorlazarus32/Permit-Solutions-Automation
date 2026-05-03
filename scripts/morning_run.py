@@ -28,6 +28,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Load .env so LOB_API_KEY, LOB_FROM_ADDRESS_ID, etc. are available to the
+# send.py module without the employee having to set env vars by hand.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(PROJECT_ROOT / ".env")
+except ImportError:
+    pass
+
 # Windows consoles default to cp1252 which chokes on many Unicode chars.
 # Force stdout/stderr to UTF-8 so our log lines and friendly messages render.
 try:
@@ -185,6 +193,27 @@ def run_homestead() -> dict:
                 "error": f"Homestead file processing failed: {e}. Tell Victor."}
 
 
+def run_homestead_tyler() -> dict:
+    """
+    Pull new Notice-of-Violation cases from Homestead's Tyler EnerGov portal.
+    Idempotent. Uses an internal watermark so subsequent runs only fetch rows
+    newer than the highest case number we've seen before.
+    """
+    from connectors.tyler_energov import run as tyler_run
+
+    try:
+        s = tyler_run("homestead")
+        return {"fetched":  s.get("fetched", 0),
+                "in_scope": s.get("in_scope", 0),
+                "inserted": s.get("inserted", 0),
+                "updated":  s.get("updated", 0),
+                "error":    None}
+    except Exception as e:
+        logging.exception("homestead tyler run failed")
+        return {"fetched": 0, "in_scope": 0, "inserted": 0, "updated": 0,
+                "error": f"Homestead Tyler pull failed: {e}. Tell Victor."}
+
+
 # ---------------------------------------------------------------------------
 # Step 3 — Show totals + confirm + send
 # ---------------------------------------------------------------------------
@@ -272,7 +301,7 @@ def main() -> int:
         banner(f"Good morning! {today_str}")
 
         # --- Step 1: Miami-Dade
-        step(1, 3, "Pulling new Miami-Dade cases...")
+        step(1, 4, "Pulling new Miami-Dade cases...")
         md = run_miami_dade()
         if md["error"]:
             friendly_error("Miami-Dade pull didn't work",
@@ -283,20 +312,31 @@ def main() -> int:
                 info(f"Checked dates {md['start']} -> {md['end']}")
             info(f"{md['inserted']} new cases pulled ({md['updated']} already in the system)")
 
-        # --- Step 2: Homestead
-        step(2, 3, "Processing Homestead spreadsheets...")
+        # --- Step 2: Homestead Tyler (live API pull, replaces / supplements PRR)
+        step(2, 4, "Pulling new Homestead violations from Tyler portal...")
+        ht = run_homestead_tyler()
+        if ht["error"]:
+            friendly_error("Homestead Tyler pull didn't work",
+                           ht["error"],
+                           "The Miami-Dade step still worked. Tell Victor about Homestead.")
+        else:
+            info(f"{ht['fetched']} cases checked, "
+                 f"{ht['inserted']} new permit/zoning leads added")
+
+        # --- Step 3: Homestead PRR Excel inbox (legacy fallback)
+        step(3, 4, "Processing Homestead PRR spreadsheets...")
         hs = run_homestead()
         if hs["error"]:
             friendly_error("Homestead files didn't process",
                            hs["error"],
                            "The scrape step still worked. Tell Victor about the Homestead side.")
         elif hs["files"] == 0:
-            info("No files in the Homestead inbox. Skipped.")
+            info("No files in the Homestead PRR inbox. Skipped.")
         else:
             info(f"{hs['files']} file(s) processed — {hs['inserted']} new records added")
 
-        # --- Step 3: Totals + confirm + send
-        step(3, 3, "Today's numbers")
+        # --- Step 4: Totals + confirm + send
+        step(4, 4, "Today's numbers")
         totals = fetch_totals()
         info(f"Total cases in system  : {totals['total']}")
         info(f"Ready to mail          : {totals['ready']}")

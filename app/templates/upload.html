@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Upload PRR{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1>Upload PRR File</h1>
+  <p class="hero-sub">Drop a public records request Excel export here. After upload, click Process PRR on the dashboard to ingest the rows into the system.</p>
+</section>
+
+<form method="POST" enctype="multipart/form-data" class="log-event-card upload-form">
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="city">City / Source</label>
+      <select name="city" id="city" required>
+        <option value="">Pick a city...</option>
+        {% for c in cities %}
+        <option value="{{ c }}">{{ c.replace('_',' ').title() }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="file">Excel File (.xlsx or .xls)</label>
+      <input type="file" name="file" id="file" accept=".xlsx,.xls" required>
+    </div>
+  </div>
+  <button type="submit">Upload</button>
+</form>
+
+<div class="lead-card">
+  <h3 class="lead-card-title">Workflow</h3>
+  <ol class="lead-kv" style="padding-left: 0;">
+    <li>Pick the city the file came from.</li>
+    <li>Choose the .xlsx file you received from the records office.</li>
+    <li>Click Upload. The file lands in <code>inbox/&lt;city&gt;/</code> on the server.</li>
+    <li>Go to the Dashboard and click <strong>Process PRR</strong> to ingest the rows.</li>
+    <li>The original file is auto-archived to <code>inbox/processed/&lt;city&gt;/</code> with a timestamp.</li>
+  </ol>
+</div>
+
+{% endblock %}

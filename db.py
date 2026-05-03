@@ -72,6 +72,109 @@ CREATE TABLE IF NOT EXISTS violations (
 CREATE INDEX IF NOT EXISTS ix_violations_source_open ON violations(source, open_date);
 CREATE INDEX IF NOT EXISTS ix_violations_lob_status ON violations(lob_status);
 CREATE INDEX IF NOT EXISTS ix_violations_folio ON violations(folio_number);
+
+-- Pipeline events: per-case CRM trail. Every call, text, contract, no-show, etc.
+-- One violation row can have many events. The dashboard funnel reads from here.
+CREATE TABLE IF NOT EXISTS pipeline_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source          TEXT NOT NULL,
+    case_number     TEXT NOT NULL,
+    event_type      TEXT NOT NULL,            -- 'call' | 'text' | 'email' | 'meeting' | 'contract' | 'declined' | 'no_response' | 'note'
+    occurred_at     TEXT NOT NULL,            -- ISO date or datetime when the event happened
+    contact_name    TEXT,
+    contact_phone   TEXT,
+    contact_email   TEXT,
+    contract_value  REAL,                     -- only meaningful for event_type='contract'
+    notes           TEXT,
+    created_at      TEXT NOT NULL,            -- ISO timestamp this row was logged
+    FOREIGN KEY (source, case_number) REFERENCES violations(source, case_number)
+);
+
+CREATE INDEX IF NOT EXISTS ix_pipeline_case  ON pipeline_events(source, case_number);
+CREATE INDEX IF NOT EXISTS ix_pipeline_type  ON pipeline_events(event_type);
+CREATE INDEX IF NOT EXISTS ix_pipeline_occur ON pipeline_events(occurred_at DESC);
+
+-- Lead intakes: rich qualification record per inbound contact.
+-- BANT-style + property-specific. Score is auto-calculated from inputs.
+-- Senior review (status pending / approved / rejected) gates whether the
+-- lead gets worked.
+CREATE TABLE IF NOT EXISTS lead_intakes (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    source                   TEXT NOT NULL,
+    case_number              TEXT NOT NULL,
+
+    -- Call metadata
+    call_at                  TEXT NOT NULL,
+    inbound_channel          TEXT,         -- phone | text | email | web | walkin
+    caller_name              TEXT,
+    caller_phone             TEXT,
+    caller_email             TEXT,
+    best_callback_time       TEXT,
+
+    -- Authority
+    is_property_owner        INTEGER,      -- 0/1
+    relationship_to_owner    TEXT,         -- spouse | family | tenant | attorney | agent | other
+    has_permission           INTEGER,
+
+    -- Violation status (what they have on hand right now)
+    notices_received_count   INTEGER,
+    fines_accrued_usd        REAL,
+    lien_filed               INTEGER,
+    court_date               TEXT,
+    inspector_contact        TEXT,
+
+    -- Motivation & urgency
+    primary_motivation       TEXT,         -- avoid_lien | sale | refi | compliance | fines | family | other
+    urgency                  TEXT,         -- critical | high | medium | low
+    has_tried_diy            INTEGER,
+    has_contacted_city       INTEGER,
+    has_hired_before         INTEGER,
+    previous_contractor      TEXT,
+
+    -- Scope of work
+    violation_types          TEXT,         -- comma-separated tags
+    materials                TEXT,         -- comma-separated
+    rough_linear_feet        REAL,
+    originally_permitted     INTEGER,
+    currently_standing       INTEGER,
+
+    -- Money & decision
+    decision_maker           TEXT,         -- self | spouse | family | partner | hoa | other
+    budget_aware             INTEGER,
+    has_other_quotes         INTEGER,
+    other_quotes_from        TEXT,
+    insurance_involved       INTEGER,
+
+    -- Timeline
+    target_resolution_date   TEXT,
+    timeline_flexibility     TEXT,         -- flexible | somewhat | inflexible
+    deadline_reason          TEXT,
+
+    -- Operator assessment
+    lead_temperature         TEXT,         -- hot | warm | cold (auto-derived from score)
+    lead_score               INTEGER,      -- 0..100
+    disposition              TEXT,         -- book_consult | send_quote | send_info | followup | not_qualified | needs_research | contract_signed
+    contract_value_usd       REAL,         -- if disposition = contract_signed
+    next_action              TEXT,
+    next_action_at           TEXT,
+    assigned_to              TEXT,
+    operator_notes           TEXT,
+
+    -- Senior review
+    senior_review_status     TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | rejected
+    senior_reviewer          TEXT,
+    senior_review_notes      TEXT,
+    senior_reviewed_at       TEXT,
+
+    created_at               TEXT NOT NULL,
+    updated_at               TEXT,
+
+    FOREIGN KEY (source, case_number) REFERENCES violations(source, case_number)
+);
+
+CREATE INDEX IF NOT EXISTS ix_intakes_case   ON lead_intakes(source, case_number);
+CREATE INDEX IF NOT EXISTS ix_intakes_review ON lead_intakes(senior_review_status, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_intakes_score  ON lead_intakes(lead_score DESC);
 """
 
 
@@ -92,6 +195,23 @@ def init_db() -> None:
     """Create tables if they don't exist. Safe to call repeatedly."""
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate_lead_intakes(conn)
+
+
+def _migrate_lead_intakes(conn) -> None:
+    """
+    Idempotent column adds for the lead_intakes table. SQLite supports
+    ALTER TABLE ADD COLUMN, so each new field becomes one statement.
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(lead_intakes)")}
+    additions = [
+        ("lead_source",             "TEXT"),
+        ("caller_property_address", "TEXT"),
+        ("caller_jurisdiction",     "TEXT"),
+    ]
+    for col, ddl in additions:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE lead_intakes ADD COLUMN {col} {ddl}")
 
 
 # Columns we accept on upsert (everything except lob_* which is set later)

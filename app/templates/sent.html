@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Sent Letters{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Sent Letters</h1>
+  <p class="hero-sub">{{ count }} letter{% if count != 1 %}s{% endif %} mailed via Lob. Most recent first.</p>
+</section>
+
+{% if rows %}
+<table class="data-table sortable">
+  <thead>
+    <tr>
+      <th>Source</th>
+      <th>Case #</th>
+      <th>Owner</th>
+      <th>Property Address</th>
+      <th>Status</th>
+      <th>Mailed At</th>
+      <th>Last Event</th>
+      <th class="col-actions">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.source.replace('_', ' ') }}</td>
+      <td><a class="mono case-link" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">{{ r.case_number }}</a></td>
+      <td>{{ r.owner_full_name or '' }}</td>
+      <td>{{ r.property_address or '' }}</td>
+      <td><span class="status status-{{ (r.lob_status or 'unknown')|lower|replace(' ','-')|replace('_','-') }}">{{ r.lob_status or 'unknown' }}</span></td>
+      <td>{{ r.lob_mailed_at or '' }}</td>
+      <td>{{ r.lob_last_event_at or '' }}</td>
+      <td class="col-actions">
+        <form method="POST" action="{{ url_for('action_log_event') }}" class="inline-quick">
+          <input type="hidden" name="case_key" value="{{ r.source }}|{{ r.case_number }}">
+          <input type="hidden" name="event_type" value="call">
+          <button type="submit" class="btn btn-secondary btn-tiny" title="Log inbound call">Call</button>
+        </form>
+        <form method="POST" action="{{ url_for('action_log_event') }}" class="inline-quick">
+          <input type="hidden" name="case_key" value="{{ r.source }}|{{ r.case_number }}">
+          <input type="hidden" name="event_type" value="contract">
+          <button type="submit" class="btn btn-secondary btn-tiny btn-tiny-success" title="Log contract signed">+Contract</button>
+        </form>
+        <a class="btn btn-secondary btn-tiny" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}" title="Open lead detail">Open</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No letters have been mailed yet.</p>
+{% endif %}
+{% endblock %}

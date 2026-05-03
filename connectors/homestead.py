@@ -64,7 +64,7 @@ log = logging.getLogger(SOURCE)
 
 
 def _combine_mailing(row: pd.Series) -> str | None:
-    """Join Homestead's split mailing fields into 'Street, City State Zip' format."""
+    """Join Homestead's split mailing fields into 'Street, City, State Zip' format."""
     street = clean(row.get("Mailing Address"))
     city   = clean(row.get("Mailing City"))
     state  = clean(row.get("State"))
@@ -72,7 +72,10 @@ def _combine_mailing(row: pd.Series) -> str | None:
     if not street:
         return None
     parts = [street]
-    locality = " ".join(p for p in (city, state, zipc) if p)
+    if city and (state or zipc):
+        locality = f"{city}, " + " ".join(p for p in (state, zipc) if p)
+    else:
+        locality = " ".join(p for p in (city, state, zipc) if p)
     if locality:
         parts.append(locality)
     return ", ".join(parts)

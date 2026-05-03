@@ -41,6 +41,15 @@ from typing import Any
 from db import connect, init_db
 from lob_sender.derive import derive_for_row
 
+# Load .env from the project root when send.py is invoked directly
+# (morning_run.py also loads it, so calls through the morning button are
+# already covered).
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
+
 LOB_API_BASE = "https://api.lob.com/v1"
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -177,6 +186,7 @@ def send_batch(
     *,
     limit: int | None = None,
     dry_run: bool = False,
+    on_progress=None,
 ) -> dict:
     """
     Process up to `limit` ready rows.
@@ -204,12 +214,29 @@ def send_batch(
     rows = fetch_ready_rows(limit=limit)
     log.info("%d row(s) eligible for mailing (limit=%s)", len(rows), limit)
 
+    total = len(rows)
     sent = 0
     skipped = 0
     failed  = 0
     results: list[dict] = []
 
+    def _report(stage: str, row, **extra):
+        if on_progress:
+            try:
+                on_progress({
+                    "stage":       stage,
+                    "done":        sent + skipped + failed,
+                    "total":       total,
+                    "case_number": row["case_number"] if row else None,
+                    "address":     (row["property_address"] if row else None),
+                    **extra,
+                })
+            except Exception:
+                pass
+
+    _report("starting", None)
     for row in rows:
+        _report("processing", row)
         derived = derive_for_row(dict(row))
         if derived["errors"]:
             skipped += 1
@@ -223,6 +250,7 @@ def send_batch(
                 "status": "skipped",
                 "errors": derived["errors"],
             })
+            _report("skipped", row)
             continue
 
         payload = _build_letter_payload(
@@ -281,6 +309,7 @@ def send_batch(
             "status": "sent",
             "letter_id": letter_id,
         })
+        _report("sent", row, letter_id=letter_id)
 
     return {
         "considered": len(rows),

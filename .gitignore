@@ -15,6 +15,7 @@ venv/
 data/*.db
 data/*.txt
 data/.morning_run.lock
+data/leads_for_review_*
 audit/*/
 inbox/*/*.xls
 inbox/*/*.xlsx
@@ -33,3 +34,7 @@ logs/
 
 # Keep folder structure markers
 !.gitkeep
+
+# Local user accounts and session secret (never commit)
+data/users.json
+data/.app_secret

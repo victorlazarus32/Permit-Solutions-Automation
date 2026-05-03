@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+{% block title %}Pipeline{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1>Lead Pipeline</h1>
+  <p class="hero-sub">Comprehensive intake, auto-scored, queued for senior review. Capture as much as possible during the call so the right call gets made on whether to pursue.</p>
+</section>
+
+<h2 class="section-heading">Funnel</h2>
+<section class="funnel">
+  <div class="funnel-card stage-mailed">
+    <div class="funnel-label">Mailed</div>
+    <div class="funnel-value">{{ funnel.mailed }}</div>
+    <div class="funnel-foot">letters sent to date</div>
+  </div>
+  <div class="funnel-card stage-call">
+    <div class="funnel-label">Inbound</div>
+    <div class="funnel-value">{{ funnel.calls }}</div>
+    <div class="funnel-foot">{{ funnel.pct_call }}% reply</div>
+  </div>
+  <div class="funnel-card stage-contract">
+    <div class="funnel-label">Contracts</div>
+    <div class="funnel-value">{{ funnel.contracts }}</div>
+    <div class="funnel-foot">{{ funnel.pct_close }}% close from inbound</div>
+  </div>
+  <div class="funnel-card stage-revenue">
+    <div class="funnel-label">Revenue</div>
+    <div class="funnel-value">${{ '{:,.0f}'.format(funnel.revenue) }}</div>
+    <div class="funnel-foot">{% if funnel.contracts %}${{ '{:,.0f}'.format(funnel.revenue / funnel.contracts) }} avg{% else %}—{% endif %}</div>
+  </div>
+</section>
+
+<h2 class="section-heading">Senior Review Queue</h2>
+<section class="review-strip">
+  <div class="review-pill review-pending">
+    <span class="dot"></span>
+    <strong>{{ review_counts.get('pending',  0) }}</strong>
+    <span class="lbl">Pending Review</span>
+  </div>
+  <div class="review-pill review-approved">
+    <span class="dot"></span>
+    <strong>{{ review_counts.get('approved', 0) }}</strong>
+    <span class="lbl">Approved</span>
+  </div>
+  <div class="review-pill review-rejected">
+    <span class="dot"></span>
+    <strong>{{ review_counts.get('rejected', 0) }}</strong>
+    <span class="lbl">Rejected</span>
+  </div>
+</section>
+
+<h2 class="section-heading">New Intake</h2>
+<form method="POST" action="{{ url_for('action_log_intake') }}" class="log-event-card intake-form">
+
+  {# ===== ALWAYS-OPEN SECTION: caller + property ===== #}
+  <div class="intake-section intake-section-open">
+    <div class="intake-section-title">Caller &amp; Property</div>
+
+    {# Lead source picker drives whether we ask for a known case or for free-text property info. #}
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Where did this lead come from?</label>
+        <div class="radio-row lead-source-radio">
+          <label><input type="radio" name="lead_source" value="mailed_letter" checked> From a mailed letter</label>
+          <label><input type="radio" name="lead_source" value="unsolicited"> Unsolicited inbound</label>
+          <label><input type="radio" name="lead_source" value="referral"> Referral</label>
+          <label><input type="radio" name="lead_source" value="website"> Website</label>
+          <label><input type="radio" name="lead_source" value="other"> Other</label>
+        </div>
+      </div>
+    </div>
+
+    {# Mailed-letter path: type-ahead case picker. Hidden when lead_source != mailed_letter. #}
+    <div id="mailed-fields" class="form-row single">
+      <div class="form-field">
+        <label for="case_key">Case <span class="field-hint">(type case number, address, or owner name)</span></label>
+        <input
+          type="text"
+          id="case_key"
+          name="case_key"
+          list="case_options"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Start typing — e.g. 20260247540, TYLER ST, or DELGADO">
+        <datalist id="case_options">
+          {% for c in cases %}
+          <option value="{{ c.source }}|{{ c.case_number }}" label="{{ c.case_number }} · {{ c.property_address or '(no address)' }} · {{ c.owner_full_name or '(no owner)' }} {% if c.is_mailed %}· mailed{% else %}· queued{% endif %}"></option>
+          {% endfor %}
+        </datalist>
+        <div id="case_context" class="case-context" hidden></div>
+      </div>
+    </div>
+
+    {# Unsolicited path: free-text property info, no DB tie. Hidden when lead_source = mailed_letter. #}
+    <div id="unsolicited-fields" class="form-row" hidden>
+      <div class="form-field">
+        <label for="caller_property_address">Property Address (free text)</label>
+        <input type="text" name="caller_property_address" id="caller_property_address"
+               placeholder="e.g. 1234 NE 10 ST, Miami, FL 33101">
+      </div>
+      <div class="form-field">
+        <label for="caller_jurisdiction">Jurisdiction / City</label>
+        <input type="text" name="caller_jurisdiction" id="caller_jurisdiction"
+               placeholder="e.g. Miami-Dade County, City of Doral">
+      </div>
+    </div>
+
+    {# Inbound channel is always visible. #}
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="inbound_channel">Inbound Channel</label>
+        <select name="inbound_channel" id="inbound_channel">
+          <option value="">—</option>
+          <option value="phone">Phone call</option>
+          <option value="text">Text message</option>
+          <option value="email">Email</option>
+          <option value="web">Web form</option>
+          <option value="walkin">Walk-in / in person</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="call_at">Date of Contact</label>
+        <input type="date" name="call_at" id="call_at" value="{{ today_iso }}">
+      </div>
+      <div class="form-field">
+        <label for="best_callback_time">Best Callback Time</label>
+        <input type="text" name="best_callback_time" id="best_callback_time" placeholder="Tomorrow before 5pm, etc.">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="caller_name">Caller Name</label>
+        <input type="text" name="caller_name" id="caller_name" placeholder="What name they gave">
+      </div>
+      <div class="form-field">
+        <label for="caller_phone">Phone</label>
+        <input type="text" name="caller_phone" id="caller_phone" placeholder="(305) 555-0123">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="caller_email">Email</label>
+        <input type="email" name="caller_email" id="caller_email" placeholder="them@example.com">
+      </div>
+    </div>
+  </div>
+
+  {# ===== Authority ===== #}
+  <details class="intake-section">
+    <summary class="intake-section-title">Authority &amp; Permission</summary>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Are they the property owner?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="is_property_owner" value="yes"> Yes</label>
+          <label><input type="radio" name="is_property_owner" value="no"> No</label>
+          <label><input type="radio" name="is_property_owner" value="" checked> Not asked</label>
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="relationship_to_owner">If not owner, relationship</label>
+        <select name="relationship_to_owner" id="relationship_to_owner">
+          <option value="">—</option>
+          <option value="spouse">Spouse</option>
+          <option value="family">Family member</option>
+          <option value="tenant">Tenant</option>
+          <option value="attorney">Attorney</option>
+          <option value="agent">Real estate agent</option>
+          <option value="manager">Property manager</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Permission to discuss the case?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="has_permission" value="yes"> Yes</label>
+          <label><input type="radio" name="has_permission" value="no"> No</label>
+          <label><input type="radio" name="has_permission" value="" checked> Not asked</label>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  {# ===== Violation status ===== #}
+  <details class="intake-section">
+    <summary class="intake-section-title">Violation Status (What's On The Table)</summary>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="notices_received_count">Notices received (count)</label>
+        <input type="number" name="notices_received_count" id="notices_received_count" min="0">
+      </div>
+      <div class="form-field">
+        <label for="fines_accrued_usd">Fines accrued so far ($)</label>
+        <input type="text" name="fines_accrued_usd" id="fines_accrued_usd" placeholder="$1,200">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Lien filed against the property?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="lien_filed" value="yes"> Yes</label>
+          <label><input type="radio" name="lien_filed" value="no"> No</label>
+          <label><input type="radio" name="lien_filed" value="" checked> Unknown</label>
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="court_date">Hearing / court date (if any)</label>
+        <input type="date" name="court_date" id="court_date">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="inspector_contact">Inspector / case officer (if known)</label>
+        <input type="text" name="inspector_contact" id="inspector_contact" placeholder="Inspector name and contact">
+      </div>
+    </div>
+  </details>
+
+  {# ===== Motivation ===== #}
+  <details class="intake-section">
+    <summary class="intake-section-title">Motivation &amp; Urgency (The "Why")</summary>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="primary_motivation">Primary motivation</label>
+        <select name="primary_motivation" id="primary_motivation">
+          <option value="">—</option>
+          <option value="sale">Trying to sell the property</option>
+          <option value="refi">Trying to refinance</option>
+          <option value="avoid_lien">Avoid a lien being placed</option>
+          <option value="fines">Stop accruing fines</option>
+          <option value="compliance">Peace of mind / compliance</option>
+          <option value="family">Family pressure / inheritance</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="urgency">Urgency</label>
+        <select name="urgency" id="urgency">
+          <option value="">—</option>
+          <option value="critical">Critical (this week)</option>
+          <option value="high">High (this month)</option>
+          <option value="medium">Medium (this quarter)</option>
+          <option value="low">Low (no firm deadline)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Have they tried to fix it themselves?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="has_tried_diy" value="yes"> Yes</label>
+          <label><input type="radio" name="has_tried_diy" value="no"> No</label>
+          <label><input type="radio" name="has_tried_diy" value="" checked> N/A</label>
+        </div>
+      </div>
+      <div class="form-field">
+        <label>Have they spoken with the city directly?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="has_contacted_city" value="yes"> Yes</label>
+          <label><input type="radio" name="has_contacted_city" value="no"> No</label>
+          <label><input type="radio" name="has_contacted_city" value="" checked> N/A</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Hired anyone to resolve this before?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="has_hired_before" value="yes"> Yes</label>
+          <label><input type="radio" name="has_hired_before" value="no"> No</label>
+          <label><input type="radio" name="has_hired_before" value="" checked> N/A</label>
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="previous_contractor">If yes, who?</label>
+        <input type="text" name="previous_contractor" id="previous_contractor" placeholder="Previous contractor name">
+      </div>
+    </div>
+  </details>
+
+  {# ===== Scope ===== #}
+  <details class="intake-section">
+    <summary class="intake-section-title">Scope of Work</summary>
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Type of violation (check all that apply)</label>
+        <div class="checkbox-grid">
+          {% for t in ['fence','gate','door','window','garage','pergola','terrace','shed','electrical','other'] %}
+          <label><input type="checkbox" name="violation_types" value="{{ t }}"> {{ t.title() }}</label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Materials (check all that apply)</label>
+        <div class="checkbox-grid">
+          {% for m in ['wood','pvc','aluminum','metal','chain-link','vinyl','dura-fence','other'] %}
+          <label><input type="checkbox" name="materials" value="{{ m }}"> {{ m.replace('-',' ').title() }}</label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="rough_linear_feet">Rough linear feet (estimate)</label>
+        <input type="text" name="rough_linear_feet" id="rough_linear_feet" placeholder="120">
+      </div>
+      <div class="form-field">
+        <label>Was the work originally permitted?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="originally_permitted" value="yes"> Yes</label>
+          <label><input type="radio" name="originally_permitted" value="no"> No</label>
+          <label><input type="radio" name="originally_permitted" value="" checked> Unknown</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Is the structure currently standing?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="currently_standing" value="yes"> Yes</label>
+          <label><input type="radio" name="currently_standing" value="no"> No (already removed)</label>
+          <label><input type="radio" name="currently_standing" value="" checked> N/A</label>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  {# ===== Money & decision ===== #}
+  <details class="intake-section">
+    <summary class="intake-section-title">Money &amp; Decision Authority</summary>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="decision_maker">Who makes the decision?</label>
+        <select name="decision_maker" id="decision_maker">
+          <option value="">—</option>
+          <option value="self">Themselves</option>
+          <option value="spouse">Spouse</option>
+          <option value="family">Family</option>
+          <option value="partner">Business partner</option>
+          <option value="hoa">HOA / association</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>Aware of typical cost ranges?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="budget_aware" value="yes"> Yes</label>
+          <label><input type="radio" name="budget_aware" value="no"> No</label>
+          <label><input type="radio" name="budget_aware" value="" checked> Not asked</label>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>Has quotes from anyone else?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="has_other_quotes" value="yes"> Yes</label>
+          <label><input type="radio" name="has_other_quotes" value="no"> No</label>
+          <label><input type="radio" name="has_other_quotes" value="" checked> Not asked</label>
+        </div>
+      </div>
+      <div class="form-field">
+        <label for="other_quotes_from">If yes, from whom?</label>
+        <input type="text" name="other_quotes_from" id="other_quotes_from" placeholder="Other contractor names">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Insurance involved (claim, mortgage condition, etc.)?</label>
+        <div class="radio-row">
+          <label><input type="radio" name="insurance_involved" value="yes"> Yes</label>
+          <label><input type="radio" name="insurance_involved" value="no"> No</label>
+          <label><input type="radio" name="insurance_involved" value="" checked> N/A</label>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  {# ===== Timeline ===== #}
+  <details class="intake-section">
+    <summary class="intake-section-title">Timeline</summary>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="target_resolution_date">Target resolution date</label>
+        <input type="date" name="target_resolution_date" id="target_resolution_date">
+      </div>
+      <div class="form-field">
+        <label for="timeline_flexibility">Flexibility</label>
+        <select name="timeline_flexibility" id="timeline_flexibility">
+          <option value="">—</option>
+          <option value="flexible">Flexible</option>
+          <option value="somewhat">Somewhat flexible</option>
+          <option value="inflexible">Hard deadline (cannot move)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="deadline_reason">If hard deadline, what is driving it?</label>
+        <input type="text" name="deadline_reason" id="deadline_reason" placeholder="Closing date, court hearing, refi rate lock, etc.">
+      </div>
+    </div>
+  </details>
+
+  {# ===== Disposition (always visible) ===== #}
+  <div class="intake-section intake-section-open intake-section-emphasis">
+    <div class="intake-section-title">Operator Disposition &amp; Notes</div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="disposition">Recommended next step</label>
+        <select name="disposition" id="disposition">
+          <option value="">—</option>
+          <option value="book_consult">Book consultation</option>
+          <option value="send_quote">Send quote</option>
+          <option value="send_info">Send info packet</option>
+          <option value="followup">Follow up later</option>
+          <option value="needs_research">Needs research</option>
+          <option value="not_qualified">Not a fit / not qualified</option>
+          <option value="contract_signed">Contract signed on this call</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="contract_value_usd">Contract value (only if signed)</label>
+        <input type="text" name="contract_value_usd" id="contract_value_usd" placeholder="$3,500">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="next_action">Next action description</label>
+        <input type="text" name="next_action" id="next_action" placeholder="e.g. Send quote by Friday">
+      </div>
+      <div class="form-field">
+        <label for="next_action_at">Next action date</label>
+        <input type="date" name="next_action_at" id="next_action_at">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="assigned_to">Assigned to</label>
+        <input type="text" name="assigned_to" id="assigned_to" placeholder="Victor / employee name">
+      </div>
+      <div class="form-field">
+        <label for="operator_notes">Operator notes</label>
+        <textarea name="operator_notes" id="operator_notes" placeholder="Anything worth remembering: tone of the call, red flags, opportunities, vibes, etc."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit">Save Intake &amp; Score Lead</button>
+</form>
+
+<h2 class="section-heading">Active Leads</h2>
+{% if intakes %}
+<table class="data-table intake-table">
+  <thead>
+    <tr>
+      <th>Score</th>
+      <th>Temp</th>
+      <th>Status</th>
+      <th>When</th>
+      <th>Caller</th>
+      <th>Case / Property</th>
+      <th>Disposition</th>
+      <th>Next Action</th>
+      <th>Senior Review</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for it in intakes %}
+    <tr class="intake-row review-{{ it.senior_review_status }}">
+      <td><span class="score-badge score-{{ it.lead_temperature }}">{{ it.lead_score }}</span></td>
+      <td><span class="status temp-{{ it.lead_temperature }}">{{ (it.lead_temperature or '?')|upper }}</span></td>
+      <td><span class="status review-status review-{{ it.senior_review_status }}">{{ it.senior_review_status|upper }}</span></td>
+      <td><span class="mono">{{ it.call_at }}</span></td>
+      <td>
+        {{ it.caller_name or '' }}
+        {% if it.caller_phone %}<br><span class="mono">{{ it.caller_phone }}</span>{% endif %}
+      </td>
+      <td>
+        <span class="mono">{{ it.case_number }}</span><br>
+        <span class="cell-narrative">{{ it.owner_full_name or '' }} &mdash; {{ it.property_address or '' }}</span>
+      </td>
+      <td>{% if it.disposition %}<span class="status disp-{{ it.disposition }}">{{ it.disposition.replace('_',' ') }}</span>{% endif %}
+        {% if it.contract_value_usd %}<br><span class="mono" style="color: var(--green);">${{ '{:,.0f}'.format(it.contract_value_usd) }}</span>{% endif %}
+      </td>
+      <td class="cell-narrative">
+        {{ it.next_action or '' }}
+        {% if it.next_action_at %}<br><span class="mono">{{ it.next_action_at }}</span>{% endif %}
+      </td>
+      <td>
+        {% if it.senior_review_status == 'pending' %}
+          <form method="POST" action="{{ url_for('action_review_intake', intake_id=it.id) }}" class="inline-review">
+            <input type="hidden" name="reviewer" value="Victor">
+            <button type="submit" name="decision" value="approved" class="btn-approve">Approve</button>
+            <button type="submit" name="decision" value="rejected" class="btn-reject">Reject</button>
+          </form>
+        {% else %}
+          {{ it.senior_reviewer or '' }}
+          {% if it.senior_reviewed_at %}<br><span class="mono">{{ it.senior_reviewed_at }}</span>{% endif %}
+          {% if it.senior_review_notes %}<br><span class="cell-narrative">{{ it.senior_review_notes }}</span>{% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No intakes yet. The first one lights up this whole table — fill in the form above when a lead calls in.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script id="cases-data" type="application/json">
+[{% for c in cases %}{"k":"{{ c.source }}|{{ c.case_number }}","cn":"{{ c.case_number }}","ad":{{ (c.property_address or '')|tojson }},"ow":{{ (c.owner_full_name or '')|tojson }},"m":{% if c.is_mailed %}1{% else %}0{% endif %}}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
+<script>
+(function() {
+  var raw = document.getElementById('cases-data').textContent.trim();
+  var cases;
+  try { cases = JSON.parse(raw); } catch (e) { cases = []; }
+  var map = Object.create(null);
+  for (var i = 0; i < cases.length; i++) { map[cases[i].k] = cases[i]; }
+
+  var input = document.getElementById('case_key');
+  var ctx   = document.getElementById('case_context');
+  if (!input || !ctx) return;
+
+  function render() {
+    var v = (input.value || '').trim();
+    if (!v) { ctx.hidden = true; ctx.textContent = ''; return; }
+    var hit = map[v];
+    if (hit) {
+      var status = hit.m ? '● mailed' : '○ queued';
+      ctx.hidden = false;
+      ctx.classList.remove('case-context-warn');
+      ctx.classList.add('case-context-ok');
+      ctx.innerHTML =
+        '<strong>' + status + '</strong> &middot; ' +
+        '<span class="mono">' + hit.cn + '</span> &middot; ' +
+        (hit.ad ? hit.ad + ' &middot; ' : '') +
+        (hit.ow || '(no owner)');
+    } else {
+      ctx.hidden = false;
+      ctx.classList.remove('case-context-ok');
+      ctx.classList.add('case-context-warn');
+      ctx.textContent = 'No exact case match yet. Keep typing or pick a suggestion.';
+    }
+  }
+  input.addEventListener('input',  render);
+  input.addEventListener('change', render);
+})();
+
+/* ===== Lead source toggle: show case picker vs free-text property fields. ===== */
+(function() {
+  var radios   = document.querySelectorAll('input[name="lead_source"]');
+  var mailed   = document.getElementById('mailed-fields');
+  var unsolic  = document.getElementById('unsolicited-fields');
+  var caseKey  = document.getElementById('case_key');
+  var addrFld  = document.getElementById('caller_property_address');
+
+  function apply() {
+    var picked = document.querySelector('input[name="lead_source"]:checked');
+    var v = picked ? picked.value : 'mailed_letter';
+    var isMailed = (v === 'mailed_letter');
+
+    mailed.hidden  = !isMailed;
+    unsolic.hidden = isMailed;
+
+    if (caseKey) {
+      caseKey.required = isMailed;
+      if (!isMailed) caseKey.value = '';
+    }
+    if (addrFld) {
+      addrFld.required = !isMailed;
+    }
+  }
+
+  radios.forEach(function(r) { r.addEventListener('change', apply); });
+  apply();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In | Permit Solutions</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="login-body">
+<div class="login-shell">
+  <div class="login-card">
+    <img src="{{ url_for('static', filename='permit_solutions_logo.png') }}" alt="Permit Solutions" class="login-logo">
+    <div class="login-brand">PERMIT SOLUTIONS</div>
+    <div class="login-sub">Operator Console</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="login-flashes">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if no_users %}
+    <div class="login-flashes">
+      <div class="flash flash-warning">
+        No users have been created yet. From the project folder run:
+        <code>python -m scripts.manage_users add &lt;username&gt; &lt;password&gt;</code>
+      </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" class="login-form">
+      <div class="form-field">
+        <label for="username">Username</label>
+        <input type="text" name="username" id="username" autocomplete="username" autofocus required spellcheck="false">
+      </div>
+      <div class="form-field">
+        <label for="password">Password</label>
+        <input type="password" name="password" id="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="login-btn">Sign In</button>
+    </form>
+
+    <div class="login-foot">Permit Solutions Operator Console &middot; {{ now }}</div>
+  </div>
+</div>
+</body>
+</html>

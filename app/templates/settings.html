@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Settings</h1>
+  <p class="hero-sub">Lob credentials and test recipient. Edit values in <code>.env</code> and restart the console.</p>
+</section>
+
+<h2 class="section-heading">Lob Credentials</h2>
+<table class="data-table">
+  <tr>
+    <th>Variable</th><th>Status</th><th>Preview</th>
+  </tr>
+  <tr>
+    <td>LOB_API_KEY</td>
+    <td>{% if env.lob_api_key.set %}<span class="status status-mailed">Set ({{ env.lob_mode }})</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td>
+    <td><code>{{ env.lob_api_key.preview }}</code></td>
+  </tr>
+  <tr>
+    <td>LOB_FROM_ADDRESS_ID</td>
+    <td>{% if env.lob_from_address_id.set %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td>
+    <td><code>{{ env.lob_from_address_id.preview }}</code></td>
+  </tr>
+  <tr>
+    <td>LOB_TEMPLATE_ID</td>
+    <td>{% if env.lob_template_id.set %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-warning">Not set (will use inline HTML)</span>{% endif %}</td>
+    <td><code>{{ env.lob_template_id.preview }}</code></td>
+  </tr>
+</table>
+
+<h2 class="section-heading">Test Recipient</h2>
+<p>Every letter sent via the test-send button below is delivered to this address, regardless of who the actual property owner is.</p>
+<table class="data-table">
+  <tr><th>Variable</th><th>Status</th><th>Preview</th></tr>
+  <tr><td>TEST_RECIPIENT_NAME</td>  <td>{% if env.test_recipient_name.set  %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td><td><code>{{ env.test_recipient_name.preview  }}</code></td></tr>
+  <tr><td>TEST_RECIPIENT_LINE1</td> <td>{% if env.test_recipient_line1.set %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td><td><code>{{ env.test_recipient_line1.preview }}</code></td></tr>
+  <tr><td>TEST_RECIPIENT_CITY</td>  <td>{% if env.test_recipient_city.set  %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td><td><code>{{ env.test_recipient_city.preview  }}</code></td></tr>
+  <tr><td>TEST_RECIPIENT_STATE</td> <td>{% if env.test_recipient_state.set %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td><td><code>{{ env.test_recipient_state.preview }}</code></td></tr>
+  <tr><td>TEST_RECIPIENT_ZIP</td>   <td>{% if env.test_recipient_zip.set   %}<span class="status status-mailed">Set</span>{% else %}<span class="status status-error">Not set</span>{% endif %}</td><td><code>{{ env.test_recipient_zip.preview   }}</code></td></tr>
+</table>
+
+<h2 class="section-heading">Send Test Letter To Yourself</h2>
+<p>Sends one real letter to the test recipient address above. Useful for visual QA before mass-mailing real property owners. Costs about $1.50.</p>
+<form method="POST" action="{{ url_for('action_test_send') }}">
+  <button type="submit" class="btn-secondary">Send 1 Test Letter</button>
+</form>
+
+{% endblock %}
