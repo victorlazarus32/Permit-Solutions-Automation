@@ -7,28 +7,27 @@
 
   Page size: 8.5" x 11" (US Letter). Lob requires 0.5" margins on all sides.
 
-  Merge variables passed on POST /v1/letters:
-    Shared between both sides:
-      {{owner_name}}           — full owner name, e.g. "JAQUELIN D CARMEN SOLORZANO"
-      {{owner_address_line1}}  — raw free-form mailing address for the in-body repeat
-      {{case_number}}          — e.g. "20260246645"
-      {{property_address}}     — short property address, e.g. "8345 NW 186 ST 201"
-      {{logo_src}}             — data URI for the letterhead logo (assets/permit_solutions_logo.png)
+  Design language:
+    Body type: Times New Roman, plain (no bold, no italic).
+    Color:     Black on white. The logo itself is the only color on the page.
+    Style:     Government / federal-notice minimalism. Thin horizontal rules
+               separate sections.
 
-    English side:
-      {{date}}                 — "April 22, 2026"
-      {{first_name}}           — "JAQUELIN" or "Property Owner"
-      {{violation_subject}}    — "windows", "fence", "fence and electrical", etc.
-      {{jurisdiction}}         — "Miami-Dade County" or "the City of Homestead"
+  Copy direction (per Victor 2026-04-28):
+    1. Direct opening that names the case, the property, and the violation.
+    2. Outcome-focused service description (speed, simplicity, full resolution).
+    3. Trust anchors: 20+ years, hundreds of cases, local expert.
+    4. Urgency from concrete consequences (fines, liens, sale/refi blocks).
+    5. Reassurance: most issues can be resolved without costly reconstruction
+       if addressed early.
+    6. Easy multi-channel call to action with free consultation.
 
-    Spanish side:
-      {{date_es}}              — "22 de abril de 2026"
-      {{first_name_es}}        — "JAQUELIN" or "Propietario/a"
-      {{violation_subject_es}} — "cerca", "puerta y ventana", etc.
-      {{jurisdiction_es}}      — "el Condado de Miami-Dade" / "la Ciudad de Homestead"
-
-  Strict-mode safety: every variable used here MUST be passed in every API
-  call (use empty string "" if a value is unknown).
+  Merge variables (must be present on every API call -- pass "" if unknown):
+    Shared:
+      {{owner_name}}, {{owner_address_line1}}, {{owner_address_line2}},
+      {{case_number}}, {{property_address}}, {{logo_src}}
+    English: {{date}}, {{first_name}}, {{violation_subject}}, {{jurisdiction}}
+    Spanish: {{date_es}}, {{first_name_es}}, {{violation_subject_es}}, {{jurisdiction_es}}
 -->
 <!DOCTYPE html>
 <html>
@@ -43,70 +42,121 @@
   html, body {
     margin: 0;
     padding: 0;
-    font-family: Helvetica, Arial, sans-serif;
+    font-family: "Times New Roman", Times, serif;
     font-size: 10.5pt;
     line-height: 1.35;
-    color: #111;
+    color: #000;
+    font-weight: normal;
+    font-style: normal;
   }
+  /* Belt and suspenders: nothing renders bold or italic, anywhere. */
+  *, b, strong, i, em, th, h1, h2, h3, h4 {
+    font-weight: normal;
+    font-style: normal;
+  }
+
   .page {
-    /* The @page margin already gives us a 0.5" safe zone; no extra padding
-       so the body fits on one sheet per language. */
     padding: 0;
   }
+
   .logo {
     text-align: center;
-    margin-bottom: 0.15in;
+    margin: 0 0 0.03in 0;
   }
   .logo img {
-    height: 0.6in;
+    height: 1.5in;
   }
-  .date {
-    font-style: italic;
-    margin-bottom: 0.12in;
+  .wordmark {
+    text-align: center;
+    font-size: 10.5pt;
+    letter-spacing: 0.22em;
+    color: #000;
+    margin-bottom: 0.03in;
   }
+  hr.heavy {
+    border: 0;
+    border-top: 1pt solid #000;
+    margin: 0.04in 0 0.02in 0;
+  }
+  hr.thin {
+    border: 0;
+    border-top: 0.4pt solid #000;
+    margin: 0.02in 0 0.10in 0;
+  }
+  hr.section {
+    border: 0;
+    border-top: 0.4pt solid #000;
+    margin: 7pt 0 3pt 0;
+  }
+
+  .meta-row {
+    display: table;
+    width: 100%;
+    margin: 0.04in 0 0.10in 0;
+    font-size: 10pt;
+  }
+  .meta-row .date    { display: table-cell; text-align: left; }
+  .meta-row .case-no { display: table-cell; text-align: right; }
+  .meta-row .case-no .label { letter-spacing: 0.06em; }
+
   .recipient-block {
-    margin-bottom: 0.15in;
+    margin-bottom: 0.10in;
   }
-  .recipient-block .case {
-    font-weight: bold;
-    font-style: italic;
-    margin-top: 4pt;
+  .recipient-block .owner {
+    text-transform: uppercase;
   }
-  p { margin: 0 0 7pt 0; }
-  .salutation { margin-bottom: 7pt; }
+
+  p { margin: 0 0 6pt 0; }
+  .salutation { margin-bottom: 6pt; }
+
   .section-heading {
-    font-weight: bold;
-    font-style: italic;
-    margin: 9pt 0 4pt 0;
+    font-size: 10.5pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 3pt 0;
   }
-  ul.assist {
-    margin: 0 0 8pt 0;
+
+  ul.outcomes {
+    margin: 0 0 5pt 0;
     padding-left: 16pt;
     list-style-type: disc;
   }
-  ul.assist li { margin-bottom: 4pt; }
-  ul.assist li b { font-weight: bold; }
-  .contact-table {
+  ul.outcomes li { margin-bottom: 2pt; }
+
+  /* Multi-channel CTA block. */
+  .cta-grid {
+    display: table;
     width: 100%;
-    border-collapse: collapse;
-    margin: 10pt 0 8pt 0;
-    border-top: 0.75pt solid #333;
-    border-bottom: 0.75pt solid #333;
+    margin: 3pt 0 3pt 0;
+    font-size: 10.5pt;
   }
-  .contact-table th, .contact-table td {
+  .cta-grid .cta-cell {
+    display: table-cell;
     text-align: center;
-    padding: 4pt 3pt;
+    padding: 1pt 4pt;
+    width: 33.333%;
   }
-  .contact-table th {
-    font-weight: bold;
-    border-bottom: 0.5pt solid #ccc;
+  .cta-label {
+    letter-spacing: 0.08em;
+    font-size: 9pt;
+    margin-bottom: 1pt;
   }
+
   .signoff { margin-top: 6pt; }
   .signoff .closing { margin-bottom: 10pt; }
-  .signoff .name { font-weight: normal; }
-  .signoff .title { font-weight: normal; }
-  .signoff .tagline { font-style: italic; }
-  b { font-weight: bold; }
+
+  .ps {
+    margin-top: 9pt;
+  }
+  .credentials {
+    text-align: center;
+    font-size: 8.5pt;
+    letter-spacing: 0.04em;
+    margin-top: 12pt;
+    padding-top: 5pt;
+    border-top: 0.4pt solid #000;
+  }
+
   .page-break {
     page-break-after: always;
     break-after: page;
@@ -114,136 +164,180 @@
 </style>
 </head>
 <body>
+
+<!-- ============== PAGE 1: ENGLISH ============== -->
 <div class="page">
 
   <div class="logo">
-    <!-- Logo is embedded as a data URI at merge time from
-         assets/permit_solutions_logo.png. See derive.py _load_logo_data_uri. -->
     <img src="{{logo_src}}" alt="Permit Solutions Services">
   </div>
+  <hr class="heavy">
+  <hr class="thin">
 
-  <div class="date">{{date}}</div>
+  <div class="meta-row">
+    <div class="date">{{date}}</div>
+    <div class="case-no"><span class="label">RE: CASE NO.</span> {{case_number}}</div>
+  </div>
 
   <div class="recipient-block">
-    {{owner_name}}<br>
-    {{owner_address_line1}}
-    <div class="case">CASE NUMBER: {{case_number}}</div>
+    <div class="owner">{{owner_name}}</div>
+    <div>{{owner_address_line1}}</div>
+    <div>{{owner_address_line2}}</div>
   </div>
 
   <p class="salutation">Hello {{first_name}},</p>
 
-  <p>I hope this message finds you well. My name is Victor L. Moreno, and I'm with
-  <b>Permit Solutions Services</b>, a company dedicated to assisting {{jurisdiction}}
-  property owners with permit-related issues. We've come to understand that your
-  property at <b>{{property_address}}</b> may have a violation concerning your
-  <b>{{violation_subject}}</b>. Navigating the permit process can be difficult, and
-  unintentional oversights can happen to the best of us.</p>
+  <p>This letter is about an active code enforcement case on your property at
+  {{property_address}}. {{jurisdiction}} opened reference number
+  {{case_number}} for a violation involving your {{violation_subject}}.
+  I'm Victor L. Moreno, a Florida-licensed fence contractor with more than
+  20 years in Miami-Dade construction and the founder of Permit Solutions
+  Services. We handle the permit side of code cleanup: paperwork, inspectors,
+  permit fees, and official closure with the city. You hire your own licensed
+  contractor for the actual repair.</p>
 
-  <div class="section-heading">Here's How We Can Assist You:</div>
-  <ul class="assist">
-    <li><b>Expert Guidance:</b> With over 20 years of experience in the construction
-    industry, we specialize in resolving permit issues for fences, windows, doors, and
-    other structures, ensuring your property adheres to {{jurisdiction}}'s regulations.</li>
-    <li><b>Resolution Services:</b> From submitting the correct paperwork to liaising
-    with local authorities, we manage the entire resolution process on your behalf.</li>
-    <li><b>Compliance Assurance:</b> Our team works diligently to address current
-    violations and safeguard against future issues, ensuring long-term compliance.</li>
+  <hr class="section">
+  <div class="section-heading">What We Handle</div>
+  <ul class="outcomes">
+    <li>Permits and applications. Right form, right department, no rework. We
+    start the day you call.</li>
+    <li>One point of contact with the city. We deal with the inspectors, the
+    paperwork, and the permit fees so you do not have to take time off work
+    or learn the system.</li>
+    <li>Official closure. Once your contractor finishes the repair, we close
+    the case with the city and you receive written confirmation.</li>
   </ul>
 
-  <p><b><i>Act Now to Prevent Further Complications:</i></b> You have <b>90 days</b>
-  to correct the violation(s). The longer permit issues remain unresolved, the greater
-  the risk of significant fines and legal complications that can disrupt your peace
-  of mind and plans. By addressing these issues promptly with Permit Solutions, you
-  can ensure that your property remains safe, legal, and fully compliant.</p>
+  <hr class="section">
+  <div class="section-heading">Why Timing Matters</div>
+  <p>An open code case rarely stays small. Daily fines accrue, and once a lien
+  is recorded against your property it clouds the title, blocks refinancing,
+  and stops a sale until paid in full. Most violations can be resolved without
+  costly reconstruction if we get involved early. The longer this sits, the
+  more it costs and the fewer options remain.</p>
 
-  <table class="contact-table">
-    <tr>
-      <th>Phone</th>
-      <th>Email</th>
-      <th>Website</th>
-    </tr>
-    <tr>
-      <td>305-600-9422</td>
-      <td>help@permitsolutions.us</td>
-      <td>www.permitsolutions.us</td>
-    </tr>
-  </table>
+  <hr class="section">
+  <div class="section-heading">Free 15-Minute Consultation</div>
+  <div class="cta-grid">
+    <div class="cta-cell">
+      <div class="cta-label">CALL OR TEXT</div>
+      305-600-9422
+    </div>
+    <div class="cta-cell">
+      <div class="cta-label">EMAIL</div>
+      help@permitsolutions.us
+    </div>
+    <div class="cta-cell">
+      <div class="cta-label">WEB</div>
+      www.permitsolutions.us
+    </div>
+  </div>
 
   <div class="signoff">
-    <div class="closing">Warm regards,</div>
+    <div class="closing">Sincerely,</div>
     <div class="name">Victor L. Moreno</div>
-    <div class="title">Chief Compliance Officer</div>
-    <div class="tagline">"Compliance Made Easy"</div>
+    <div class="title">Founder, Permit Solutions Services</div>
+  </div>
+
+  <p class="ps">P.S. The longer this case stays open, the harder and more
+  expensive it gets to clean up. A 15-minute call costs nothing and tells you
+  exactly what your case needs.</p>
+
+  <div class="credentials">
+    Florida-Licensed Fence Contractor #08BS00863 &middot; Insured &middot;
+    20+ years in Miami-Dade construction
   </div>
 
 </div>
 
 <div class="page-break"></div>
 
+<!-- ============== PAGE 2: SPANISH ============== -->
 <div class="page">
 
   <div class="logo">
     <img src="{{logo_src}}" alt="Permit Solutions Services">
   </div>
+  <hr class="heavy">
+  <hr class="thin">
 
-  <div class="date">{{date_es}}</div>
+  <div class="meta-row">
+    <div class="date">{{date_es}}</div>
+    <div class="case-no"><span class="label">REF: CASO NO.</span> {{case_number}}</div>
+  </div>
 
   <div class="recipient-block">
-    {{owner_name}}<br>
-    {{owner_address_line1}}
-    <div class="case">NÚMERO DE CASO: {{case_number}}</div>
+    <div class="owner">{{owner_name}}</div>
+    <div>{{owner_address_line1}}</div>
+    <div>{{owner_address_line2}}</div>
   </div>
 
   <p class="salutation">Hola {{first_name_es}},</p>
 
-  <p>Espero que esta carta le encuentre bien. Mi nombre es Victor L. Moreno, y represento a
-  <b>Permit Solutions Services</b>, una compañía dedicada a ayudar a los propietarios de
-  {{jurisdiction_es}} con asuntos relacionados con permisos. Hemos recibido información de
-  que su propiedad ubicada en <b>{{property_address}}</b> podría tener una violación
-  referente a su <b>{{violation_subject_es}}</b>. Navegar el proceso de permisos puede ser
-  complicado, y descuidos involuntarios le pueden suceder a cualquiera.</p>
+  <p>Esta carta trata sobre un caso activo de cumplimiento de códigos en su
+  propiedad ubicada en {{property_address}}. {{jurisdiction_es}} abrió el
+  número de referencia {{case_number}} por una violación que involucra su
+  {{violation_subject_es}}. Mi nombre es Victor L. Moreno, contratista de
+  cercas con licencia de Florida y con más de 20 años en construcción en
+  Miami-Dade, y fundador de Permit Solutions Services. Nosotros nos encargamos
+  del lado de los permisos en la limpieza de su caso: papeleo, inspectores,
+  tarifas de permisos, y el cierre oficial con la ciudad. Usted contrata a su
+  propio contratista con licencia para la reparación en sí.</p>
 
-  <div class="section-heading">Cómo Podemos Ayudarle:</div>
-  <ul class="assist">
-    <li><b>Asesoramiento Experto:</b> Con más de 20 años de experiencia en la industria de
-    la construcción, nos especializamos en resolver asuntos de permisos para cercas,
-    ventanas, puertas y otras estructuras, asegurando que su propiedad cumpla con las
-    regulaciones de {{jurisdiction_es}}.</li>
-    <li><b>Servicios de Resolución:</b> Desde la presentación de la documentación correcta
-    hasta la coordinación con las autoridades locales, manejamos todo el proceso de
-    resolución en su nombre.</li>
-    <li><b>Aseguramiento de Cumplimiento:</b> Nuestro equipo trabaja diligentemente para
-    atender las violaciones actuales y protegerle contra problemas futuros, asegurando el
-    cumplimiento a largo plazo.</li>
+  <hr class="section">
+  <div class="section-heading">Lo Que Manejamos</div>
+  <ul class="outcomes">
+    <li>Permisos y solicitudes. Formulario correcto, departamento correcto,
+    sin rehacer. Empezamos el día que usted llama.</li>
+    <li>Un solo punto de contacto con la ciudad. Tratamos con los inspectores,
+    el papeleo y las tarifas de permisos para que usted no tenga que
+    ausentarse del trabajo ni aprender el sistema.</li>
+    <li>Cierre oficial. Una vez que su contratista termine la reparación,
+    cerramos el caso con la ciudad y usted recibe confirmación escrita.</li>
   </ul>
 
-  <p><b><i>Actúe Ahora para Evitar Mayores Complicaciones:</i></b> Usted tiene
-  <b>90 días</b> para corregir la(s) violación(es). Mientras más tiempo queden sin
-  resolver los asuntos de permisos, mayor es el riesgo de multas significativas y
-  complicaciones legales que pueden afectar su tranquilidad y sus planes. Al atender
-  estos asuntos rápidamente con Permit Solutions, usted puede asegurar que su propiedad
-  permanezca segura, legal y totalmente en cumplimiento.</p>
+  <hr class="section">
+  <div class="section-heading">Por Qué El Tiempo Importa</div>
+  <p>Un caso de código abierto rara vez se queda pequeño. Se acumulan multas
+  diarias, y una vez que se registra un gravamen contra su propiedad, oscurece
+  el título, bloquea el refinanciamiento y detiene una venta hasta que sea
+  pagado en su totalidad. La mayoría de las violaciones pueden resolverse sin
+  reconstrucción costosa si actuamos a tiempo. Mientras más tiempo esto
+  permanezca sin resolver, más cuesta y menos opciones quedan.</p>
 
-  <table class="contact-table">
-    <tr>
-      <th>Teléfono</th>
-      <th>Correo Electrónico</th>
-      <th>Sitio Web</th>
-    </tr>
-    <tr>
-      <td>305-600-9422</td>
-      <td>help@permitsolutions.us</td>
-      <td>www.permitsolutions.us</td>
-    </tr>
-  </table>
+  <hr class="section">
+  <div class="section-heading">Consulta Gratis De 15 Minutos</div>
+  <div class="cta-grid">
+    <div class="cta-cell">
+      <div class="cta-label">LLAME O ENVÍE TEXTO</div>
+      305-600-9422
+    </div>
+    <div class="cta-cell">
+      <div class="cta-label">CORREO</div>
+      help@permitsolutions.us
+    </div>
+    <div class="cta-cell">
+      <div class="cta-label">WEB</div>
+      www.permitsolutions.us
+    </div>
+  </div>
 
   <div class="signoff">
-    <div class="closing">Cordiales saludos,</div>
+    <div class="closing">Atentamente,</div>
     <div class="name">Victor L. Moreno</div>
-    <div class="title">Director de Cumplimiento</div>
-    <div class="tagline">"Cumplimiento Hecho Fácil"</div>
+    <div class="title">Fundador, Permit Solutions Services</div>
+  </div>
+
+  <p class="ps">P.D. Mientras más tiempo permanezca abierto este caso, más
+  difícil y costoso se vuelve resolverlo. Una llamada de 15 minutos no cuesta
+  nada y le dice exactamente lo que su caso necesita.</p>
+
+  <div class="credentials">
+    Contratista de Cercas con Licencia de Florida #08BS00863 &middot; Asegurado
+    &middot; 20+ años en construcción en Miami-Dade
   </div>
 
 </div>
+
 </body>
 </html>

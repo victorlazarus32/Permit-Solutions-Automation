@@ -33,6 +33,7 @@ READY_SQL = """
       AND owner_full_name      IS NOT NULL
       AND lob_letter_id        IS NULL
       AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
+      {source_filter}
     ORDER BY source, first_seen_at ASC
 """
 
@@ -102,14 +103,20 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None,
                     help="Only render the first N letters (useful for a quick look).")
+    ap.add_argument("--source",
+                    help="Restrict to one source (e.g. 'homestead', "
+                         "'miami_dade_unincorporated').")
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     template = load_template()
 
-    # Pull rows
+    sql = READY_SQL.format(
+        source_filter=f"AND source = ?" if args.source else "",
+    )
+    params = [args.source] if args.source else []
     with connect() as conn:
-        rows = list(conn.execute(READY_SQL))
+        rows = list(conn.execute(sql, params))
     if args.limit:
         rows = rows[: args.limit]
 

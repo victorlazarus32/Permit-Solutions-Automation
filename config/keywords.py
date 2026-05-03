@@ -8,24 +8,51 @@ To add a keyword: add a new line to KEYWORD_PATTERNS.
 To remove: delete or comment out the line.
 
 The filter searches the AllegedViolation field on each case row.
+
+Trade scope (Allday Fence and adjacent work):
+fences, gates, durafence, doors, garage, windows, pergolas, terraces, electrical.
+The material+structure compound entries (pvc fence, metal gate, wood fence, etc.)
+are functionally redundant with the bare fence/gate regexes, but they make the
+matched_keywords column self-documenting at review time.
 """
 
 KEYWORD_PATTERNS = [
-    # Fence / fencing
-    r"\bfence(s|ing)?\b",
-    r"\bchain[- ]?link( fence)?\b",
+    # Fence / fencing (any material).
+    # NOTE: stem is `fenc`, not `fence` -- the letter `e` is NOT inside `fencing`
+    # or `fenced`. `\bfence(s|ing)?\b` would silently miss "illegal fencing".
+    r"\bfenc(e|es|ed|ing)\b",
+    r"\bchain[- ]?link( fenc(e|es|ed|ing))?\b",
     r"\bdurafence\b",
-    r"\bmetal fence\b",
+    r"\bmetal\s+fenc(e|es|ed|ing)\b",
+    r"\bpvc\s+fenc(e|es|ed|ing)\b",
+    r"\bwood(en)?\s+fenc(e|es|ed|ing)\b",
+    r"\baluminum\s+fenc(e|es|ed|ing)\b",
 
-    # Gates
+    # Gates (any material)
     r"\bgate(s)?\b",
+    r"\bmetal\s+gate(s)?\b",
+    r"\bpvc\s+gate(s)?\b",
+    r"\bwood(en)?\s+gate(s)?\b",
+    r"\baluminum\s+gate(s)?\b",
 
     # Doors
     r"\bdoor(s)?\b",
-    r"\bgarage door(s)?\b",
+    r"\bgarage\s+door(s)?\b",
+
+    # Garage (broad: covers conversions, additions, new garage construction)
+    r"\bgarage(s)?\b",
 
     # Windows
     r"\bwindow(s)?\b",
+
+    # Pergolas
+    r"\bpergolas?\b",
+
+    # Terraces
+    r"\bterraces?\b",
+
+    # Sheds (detached storage structures, very common in Miami-Dade violations)
+    r"\bshed(s)?\b",
 
     # Electrical
     r"\belectrical\b",

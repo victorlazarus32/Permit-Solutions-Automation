@@ -25,6 +25,44 @@ log = logging.getLogger(__name__)
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "permit_solutions_logo.png"
 
 
+_LOCALITY_PATTERN = re.compile(
+    r"^(.+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$"
+)
+
+
+def _normalize_locality(locality: str) -> str:
+    """
+    Insert the missing comma between city and state on a 'CITY STATE ZIP'
+    string so it renders as 'CITY, STATE ZIP'. Leaves the string alone if
+    it already has a comma or doesn't match the expected pattern.
+    """
+    s = (locality or "").strip()
+    if not s or "," in s:
+        return s
+    m = _LOCALITY_PATTERN.match(s)
+    if m:
+        return f"{m.group(1)}, {m.group(2)} {m.group(3)}"
+    return s
+
+
+def _split_mailing_address(addr: str) -> tuple[str, str]:
+    """
+    Split 'STREET, CITY STATE ZIP' into ('STREET', 'CITY, STATE ZIP') so the
+    letter can render the recipient block on three lines (name / street /
+    city-state-zip). Splits on the LAST comma so multi-comma street parts
+    (e.g. 'APT 5, 4952 NW 7 AVE, MIAMI FL 33127') still group correctly.
+    Inserts a comma between city and state if the source data omitted it.
+    Returns (addr, '') when there's no comma.
+    """
+    s = (addr or "").strip()
+    if not s:
+        return "", ""
+    if "," not in s:
+        return s, ""
+    street, _, locality = s.rpartition(",")
+    return street.strip(), _normalize_locality(locality.strip())
+
+
 @lru_cache(maxsize=1)
 def _load_logo_data_uri() -> str:
     """Read the PNG logo once and return it as a data URI for the letter header."""
@@ -159,6 +197,10 @@ def derive_first_name(owner_full_name: str | None) -> str:
       1. First-name token of the first owner (e.g. 'Mailen Ramos / ...' -> 'Mailen')
       2. Full entity name for LLCs/trusts (e.g. 'OMEGA INV LLC')
       3. 'Property Owner' when nothing usable is available
+
+    Personal first names are title-cased so the salutation reads 'Hello Jose,'
+    rather than 'Hello JOSE,' (PA roll data is all-caps). Entity names stay
+    as-is — 'OMEGA INV LLC' is correct, 'Omega Inv Llc' is not.
     """
     first_owner = _first_owner_name(owner_full_name)
     if not first_owner:
@@ -166,7 +208,9 @@ def derive_first_name(owner_full_name: str | None) -> str:
     if _NON_PERSONAL_TOKENS.search(first_owner):
         return first_owner  # entity name, use whole thing
     token = first_owner.split()[0].strip(",.;:")
-    return token or first_owner
+    if not token:
+        return first_owner
+    return token.title()
 
 
 def derive_first_name_es(owner_full_name: str | None) -> str:
@@ -177,7 +221,9 @@ def derive_first_name_es(owner_full_name: str | None) -> str:
     if _NON_PERSONAL_TOKENS.search(first_owner):
         return first_owner
     token = first_owner.split()[0].strip(",.;:")
-    return token or first_owner
+    if not token:
+        return first_owner
+    return token.title()
 
 
 def format_letter_date(d: date | None = None) -> str:
@@ -322,11 +368,15 @@ def derive_for_row(row: dict[str, Any], today: date | None = None) -> dict[str, 
     matched = row.get("matched_keywords")
     alleged = row.get("alleged_violation")
 
+    raw_mailing = (row.get("owner_mailing_address") or "").strip()
+    mailing_street, mailing_locality = _split_mailing_address(raw_mailing)
+
     merge = {
         "date":                 format_letter_date(today),
         "date_es":              format_letter_date_es(today),
         "owner_name":           owner_name,  # cleaned, matches `to.name`
-        "owner_address_line1":  (row.get("owner_mailing_address") or "").strip(),
+        "owner_address_line1":  mailing_street,
+        "owner_address_line2":  mailing_locality,
         "case_number":          str(row.get("case_number") or ""),
         "first_name":           derive_first_name(row.get("owner_full_name")),
         "first_name_es":        derive_first_name_es(row.get("owner_full_name")),
