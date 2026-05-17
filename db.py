@@ -14,10 +14,15 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
+import os
 from pathlib import Path
 from typing import Iterable, Mapping, Any
 
-DB_PATH = Path(__file__).resolve().parent / "data" / "violations.db"
+# DB lives in the project's data/ folder by default. On Render (or any host
+# with a persistent disk mounted elsewhere), set DB_PATH to that mount point
+# so the database survives deploys.
+_default_db_path = Path(__file__).resolve().parent / "data" / "violations.db"
+DB_PATH = Path(os.environ.get("DB_PATH") or _default_db_path)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS violations (

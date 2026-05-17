@@ -1631,7 +1631,9 @@ def _local_lan_ip() -> str:
 
 
 def main() -> None:
-    port = int(os.environ.get("APP_PORT", "8000"))
+    # Render and most PaaS providers inject the listen port as PORT.
+    # APP_PORT is the local override for development on Victor's laptop.
+    port = int(os.environ.get("PORT") or os.environ.get("APP_PORT", "8000"))
     host = os.environ.get("APP_HOST", "0.0.0.0")
     lan  = _local_lan_ip()
     log.info("==========================================================")
