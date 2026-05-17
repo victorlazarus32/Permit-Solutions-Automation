@@ -22,7 +22,9 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "permit_solutions_logo.png"
+LOGO_PATH      = Path(__file__).resolve().parent.parent / "assets" / "permit_solutions_logo.png"
+SIGNATURE_DIR  = Path(__file__).resolve().parent.parent / "assets"
+SIGNATURE_STEM = "victor_signature"
 
 
 _LOCALITY_PATTERN = re.compile(
@@ -71,6 +73,24 @@ def _load_logo_data_uri() -> str:
         return ""
     encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
     return f"data:image/png;base64,{encoded}"
+
+
+@lru_cache(maxsize=1)
+def _load_signature_data_uri() -> str:
+    """
+    Read Victor's signature image and return it as a data URI for the sign-off
+    block. Searches `assets/victor_signature.{png,jpg,jpeg}` so Victor can drop
+    whatever format he has on hand. Returns empty string if no file is found --
+    the template hides the <img> via CSS so the rest of the letter still
+    renders cleanly.
+    """
+    for ext in ("png", "jpg", "jpeg"):
+        candidate = SIGNATURE_DIR / f"{SIGNATURE_STEM}.{ext}"
+        if candidate.exists():
+            encoded = base64.b64encode(candidate.read_bytes()).decode("ascii")
+            mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/png"
+            return f"data:{mime};base64,{encoded}"
+    return ""
 
 # Sources we know how to introduce in the letter copy.
 JURISDICTION_BY_SOURCE = {
@@ -386,6 +406,7 @@ def derive_for_row(row: dict[str, Any], today: date | None = None) -> dict[str, 
         "jurisdiction":         jurisdiction,
         "jurisdiction_es":      jurisdiction_es,
         "logo_src":             _load_logo_data_uri(),
+        "signature_src":        _load_signature_data_uri(),
     }
 
     return {

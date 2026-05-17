@@ -4,8 +4,14 @@
 {% block content %}
 <section class="hero">
   <h1>Settings</h1>
-  <p class="hero-sub">Lob credentials and test recipient. Edit values in <code>.env</code> and restart the console.</p>
+  <p class="hero-sub">Reusable templates and credentials.</p>
 </section>
+
+<h2 class="section-heading">Contracts</h2>
+<p>Saved services-and-terms templates that attach to invoices (and, later, estimates) so the same warranty / scope / payment language doesn't get retyped per job.</p>
+<p>
+  <a class="btn-primary" href="{{ url_for('contracts_list') }}">Manage Contracts</a>
+</p>
 
 <h2 class="section-heading">Lob Credentials</h2>
 <table class="data-table">

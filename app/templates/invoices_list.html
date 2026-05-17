@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Invoices{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('dashboard') }}">Dashboard</a> · Invoices</p>
+      <h1>Invoices</h1>
+      <p class="hero-sub">Bill clients, track outstanding balances, and record payments.</p>
+    </div>
+    <div class="lead-hero-actions">
+      <a class="btn-primary" href="{{ url_for('invoice_new') }}">+ New Invoice</a>
+    </div>
+  </div>
+</section>
+
+<div class="kpi-row" style="margin-bottom: 1.25rem;">
+  <div class="kpi">
+    <span class="kpi-label">Outstanding</span>
+    <span class="kpi-value">${{ '{:,.2f}'.format(stats.outstanding) }}</span>
+    <span class="kpi-sub">{{ stats.sent_count }} sent</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Overdue</span>
+    <span class="kpi-value" style="color: var(--red);">${{ '{:,.2f}'.format(stats.overdue_amount) }}</span>
+    <span class="kpi-sub">{{ stats.overdue_count }} past due</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Collected</span>
+    <span class="kpi-value" style="color: var(--emerald);">${{ '{:,.2f}'.format(stats.collected) }}</span>
+    <span class="kpi-sub">{{ stats.paid_count }} paid</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Drafts</span>
+    <span class="kpi-value">{{ stats.drafts }}</span>
+    <span class="kpi-sub">not yet sent</span>
+  </div>
+</div>
+
+<div class="filter-row" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+  {% set filters = [('all', 'All'), ('draft','Draft'), ('sent','Sent'), ('partial','Partial'), ('overdue','Overdue'), ('paid','Paid'), ('void','Void')] %}
+  {% for key, label in filters %}
+    <a class="chip {% if active_status == key %}chip-active{% endif %}"
+       href="{{ url_for('invoices_list') }}{% if key != 'all' %}?status={{ key }}{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if invoices %}
+<div class="lead-card">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Invoice #</th>
+        <th>Client</th>
+        <th>Issued</th>
+        <th>Due</th>
+        <th class="num">Total</th>
+        <th class="num">Balance</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inv in invoices %}
+      <tr>
+        <td><a class="mono" href="{{ url_for('invoice_detail', invoice_id=inv.id) }}">{{ inv.invoice_number }}</a></td>
+        <td>
+          {{ inv.client_name }}
+          {% if inv.case_number %}<br><span class="mono" style="font-size: 0.8em; color: var(--ink-mute);">{{ inv.case_number }}</span>{% endif %}
+        </td>
+        <td>{{ inv.issued_at[:10] if inv.issued_at else '—' }}</td>
+        <td>
+          {{ inv.due_at or '—' }}
+          {% if inv.is_overdue %}<span class="status status-failed" style="margin-left: 4px;">OVERDUE</span>{% endif %}
+        </td>
+        <td class="num">${{ '{:,.2f}'.format(inv.total) }}</td>
+        <td class="num">
+          {% if inv.balance_due > 0 %}
+            <strong>${{ '{:,.2f}'.format(inv.balance_due) }}</strong>
+          {% else %}
+            <span style="color: var(--ink-mute);">$0.00</span>
+          {% endif %}
+        </td>
+        <td><span class="status status-{{ inv.status }}">{{ inv.status|upper }}</span></td>
+        <td>
+          <a class="btn-link" href="{{ url_for('invoice_detail', invoice_id=inv.id) }}">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="lead-card">
+  <p class="empty-inline">
+    {% if active_status and active_status != 'all' %}
+      No invoices with status "{{ active_status }}".
+    {% else %}
+      No invoices yet. <a href="{{ url_for('invoice_new') }}">Create the first one</a>.
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
+<style>
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column;
+  }
+  .kpi-label { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); }
+  .kpi-value { font-size: 1.6rem; font-weight: 700; margin-top: 4px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .kpi-sub   { font-size: 0.78rem; color: var(--ink-mute); margin-top: 2px; }
+
+  .chip {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .chip:hover { border-color: var(--brand-orange); color: var(--brand-orange); }
+  .chip-active {
+    background: var(--brand-orange);
+    border-color: var(--brand-orange);
+    color: #fff;
+  }
+  .chip-active:hover { color: #fff; }
+
+  table.data-table { width: 100%; border-collapse: collapse; }
+  table.data-table th {
+    text-align: left; padding: 8px 10px;
+    font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute);
+    border-bottom: 1px solid var(--border);
+  }
+  table.data-table th.num, table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.data-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.data-table tbody tr:hover { background: var(--surface-2); }
+
+  .status-draft   { background: var(--bg-soft);     color: var(--ink-mute); }
+  .status-sent    { background: var(--blue-soft);   color: var(--blue); }
+  .status-partial { background: var(--amber-soft);  color: var(--amber); }
+  .status-paid    { background: var(--emerald-soft); color: var(--emerald); }
+  .status-void    { background: #f3f4f6;            color: #6b7280; text-decoration: line-through; }
+  .status-overdue, .status-failed { background: var(--red-soft); color: var(--red); }
+</style>
+
+{% endblock %}

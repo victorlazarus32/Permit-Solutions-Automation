@@ -95,24 +95,49 @@ def _post_letter(payload: dict, api_key: str, idempotency_key: str) -> dict:
 
 # ---------- DB helpers ----------
 
-READY_TO_MAIL_SQL = """
+READY_TO_MAIL_BASE = """
     SELECT *
     FROM violations
     WHERE owner_mailing_address IS NOT NULL
       AND owner_full_name      IS NOT NULL
       AND lob_letter_id        IS NULL
       AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
-    ORDER BY first_seen_at ASC
 """
 
 
-def fetch_ready_rows(limit: int | None = None) -> list[sqlite3.Row]:
-    """Return rows that are eligible for mailing."""
-    sql = READY_TO_MAIL_SQL
+def fetch_ready_rows(limit: int | None = None,
+                     since_days: int | None = None,
+                     since_open_date: str | None = None,
+                     source: str | None = None) -> list[sqlite3.Row]:
+    """
+    Return rows that are eligible for mailing.
+
+    Args:
+      limit:           Cap the result set.
+      since_days:      Only include cases whose `open_date` is within the last
+                       N days. Mutually exclusive with `since_open_date` --
+                       both passed means since_open_date wins.
+      since_open_date: ISO date ('YYYY-MM-DD'). Only include cases whose
+                       `open_date >= since_open_date`. Cases with a null
+                       open_date are excluded when either date filter is used.
+      source:          Restrict to one source (e.g. 'miami_dade_unincorporated').
+    """
+    sql = READY_TO_MAIL_BASE
+    params: list = []
+    if source:
+        sql += " AND source = ?"
+        params.append(source)
+    if since_open_date:
+        sql += " AND open_date IS NOT NULL AND open_date >= ?"
+        params.append(since_open_date)
+    elif since_days is not None:
+        sql += " AND open_date IS NOT NULL AND open_date >= date('now', ?)"
+        params.append(f"-{int(since_days)} days")
+    sql += " ORDER BY first_seen_at ASC"
     if limit is not None:
         sql += f" LIMIT {int(limit)}"
     with connect() as conn:
-        return list(conn.execute(sql))
+        return list(conn.execute(sql, params))
 
 
 def update_lob_state(
@@ -157,6 +182,7 @@ def _build_letter_payload(
     color: bool,
     double_sided: bool,
     mail_type: str,
+    address_placement: str,
 ) -> dict:
     """Construct the Lob /v1/letters request body."""
     payload: dict[str, Any] = {
@@ -169,6 +195,11 @@ def _build_letter_payload(
         "color":            color,
         "double_sided":     double_sided,
         "mail_type":        mail_type,
+        # insert_blank_page = Lob puts the return + recipient address blocks
+        # on their own dedicated first page, leaving our letter design fully
+        # intact. Alternative is top_first_page (default), which overlays the
+        # address blocks on top of page 1 — that collides with our letterhead.
+        "address_placement": address_placement,
         "use_type":         "operational",   # not marketing — these are notices
         "metadata": {
             # Lob caps each metadata value at 500 chars; cap source/case to be safe
@@ -186,6 +217,9 @@ def send_batch(
     *,
     limit: int | None = None,
     dry_run: bool = False,
+    since_days: int | None = None,
+    since_open_date: str | None = None,
+    source: str | None = None,
     on_progress=None,
 ) -> dict:
     """
@@ -202,6 +236,13 @@ def send_batch(
     # both sides land on one physical sheet rather than two.
     double_sided    = os.environ.get("LOB_DOUBLE_SIDED", "true").lower() == "true"
     mail_type       = os.environ.get("LOB_MAIL_TYPE", "usps_first_class")
+    # Where Lob places the return + recipient address blocks. Default is
+    # insert_blank_page (clean separation; addresses on their own first
+    # sheet, letter content untouched). Alternative is top_first_page,
+    # which overlays the addresses on page 1 of the letter — that mangles
+    # the letterhead.
+    address_placement = os.environ.get("LOB_ADDRESS_PLACEMENT",
+                                        "insert_blank_page")
 
     if not dry_run:
         if not api_key:
@@ -211,8 +252,10 @@ def send_batch(
 
     template_html = None if template_id else _load_template_html()
 
-    rows = fetch_ready_rows(limit=limit)
-    log.info("%d row(s) eligible for mailing (limit=%s)", len(rows), limit)
+    rows = fetch_ready_rows(limit=limit, since_days=since_days,
+                            since_open_date=since_open_date, source=source)
+    log.info("%d row(s) eligible for mailing (limit=%s, since_days=%s, since_open_date=%s, source=%s)",
+             len(rows), limit, since_days, since_open_date, source)
 
     total = len(rows)
     sent = 0
@@ -262,6 +305,7 @@ def send_batch(
             color=color,
             double_sided=double_sided,
             mail_type=mail_type,
+            address_placement=address_placement,
         )
 
         if dry_run:
@@ -325,6 +369,11 @@ def _cli() -> None:
     p = argparse.ArgumentParser(description="Send queued violation letters via Lob.")
     p.add_argument("--limit", type=int, default=None,
                    help="Cap the number of letters this run (default: send all eligible).")
+    p.add_argument("--since-days", type=int, default=None,
+                   help="Only send cases the city opened within the last N days "
+                        "(filters by violations.open_date). Useful for fresh-only runs.")
+    p.add_argument("--source", default=None,
+                   help="Restrict to one source (e.g. miami_dade_unincorporated, homestead).")
     p.add_argument("--dry-run", action="store_true",
                    help="Build payloads and print them, but do not call Lob.")
     p.add_argument("--verbose", "-v", action="store_true")
@@ -335,7 +384,12 @@ def _cli() -> None:
         format="%(asctime)s [%(name)s] %(message)s",
     )
 
-    summary = send_batch(limit=args.limit, dry_run=args.dry_run)
+    summary = send_batch(
+        limit=args.limit,
+        dry_run=args.dry_run,
+        since_days=args.since_days,
+        source=args.source,
+    )
     print()
     print(f"Considered: {summary['considered']}")
     print(f"  Sent:    {summary['sent']}")

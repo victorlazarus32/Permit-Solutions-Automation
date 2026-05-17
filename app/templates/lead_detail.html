@@ -135,6 +135,37 @@
     </div>
 
     <div class="lead-card">
+      <h3 class="lead-card-title">Invoices ({{ case_invoices|length }})</h3>
+      {% if case_invoices %}
+      <ul class="invoice-mini-list">
+        {% for ci in case_invoices %}
+        <li>
+          <a class="mono" href="{{ url_for('invoice_detail', invoice_id=ci.id) }}">{{ ci.invoice_number }}</a>
+          <span class="status status-{{ ci.status }}">{{ ci.status|upper }}</span>
+          <span class="mono" style="color: var(--ink-mute);">${{ '{:,.2f}'.format(ci.total) }}</span>
+          {% if ci.balance_due > 0 and ci.status != 'draft' %}
+            <span class="mono" style="color: var(--brand-orange);">(bal ${{ '{:,.2f}'.format(ci.balance_due) }})</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-inline">No invoices yet for this case.</p>
+      {% endif %}
+      <a class="btn btn-secondary lead-card-cta" href="{{ url_for('invoice_new') }}?case={{ v.source }}|{{ v.case_number }}">+ Create invoice</a>
+      <style>
+        .invoice-mini-list { list-style: none; padding: 0; margin: 0 0 8px 0; }
+        .invoice-mini-list li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .invoice-mini-list li:last-child { border-bottom: 0; }
+        .status-draft   { background: var(--bg-soft);     color: var(--ink-mute); }
+        .status-sent    { background: var(--blue-soft);   color: var(--blue); }
+        .status-partial { background: var(--amber-soft);  color: var(--amber); }
+        .status-paid    { background: var(--emerald-soft); color: var(--emerald); }
+        .status-void    { background: #f3f4f6;            color: #6b7280; }
+      </style>
+    </div>
+
+    <div class="lead-card">
       <h3 class="lead-card-title">Quick Event</h3>
       <p class="lead-card-desc">Log a fast touchpoint without filling the full intake (left voicemail, sent text, etc).</p>
       <form method="POST" action="{{ url_for('action_log_event') }}" class="quick-event-form">

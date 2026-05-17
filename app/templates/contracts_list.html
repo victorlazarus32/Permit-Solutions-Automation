@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Contracts{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <h1>Contracts</h1>
+      <p class="hero-sub">
+        {{ count }} contract{% if count != 1 %}s{% endif %} saved.
+        Use these to fill in the services and terms language that prints on invoices and estimates.
+      </p>
+    </div>
+    <div>
+      <a class="btn-primary" href="{{ url_for('contract_new') }}">+ New Contract</a>
+    </div>
+  </div>
+</section>
+
+{% if contracts %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Defaults</th>
+      <th>Details preview</th>
+      <th class="col-actions">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in contracts %}
+    <tr>
+      <td><strong>{{ c.name }}</strong></td>
+      <td>
+        {% if c.is_default_estimate %}<span class="kw-chip">Estimate default</span>{% endif %}
+        {% if c.is_default_invoice  %}<span class="kw-chip">Invoice default</span>{% endif %}
+        {% if not c.is_default_estimate and not c.is_default_invoice %}
+          <span style="color: var(--ink-mute);">—</span>
+        {% endif %}
+      </td>
+      <td class="cell-narrative">
+        {{ (c.details or '')[:160] }}{% if c.details and c.details|length > 160 %}…{% endif %}
+      </td>
+      <td class="col-actions" style="white-space: nowrap;">
+        <a class="btn-secondary btn-tiny" href="{{ url_for('contract_edit', contract_id=c.id) }}">Edit</a>
+        <form method="POST" action="{{ url_for('contract_delete', contract_id=c.id) }}"
+              style="display: inline;"
+              onsubmit="return confirm('Delete contract \&quot;{{ c.name }}\&quot;? This cannot be undone.');">
+          <button type="submit" class="btn-tiny" style="color: var(--red); background: none; border: none; cursor: pointer;">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">
+  No contracts yet. Click <strong>New Contract</strong> to save your first one
+  (e.g., your standard services description and terms &amp; conditions).
+</p>
+{% endif %}
+{% endblock %}

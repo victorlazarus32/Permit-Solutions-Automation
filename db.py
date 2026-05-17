@@ -175,6 +175,79 @@ CREATE TABLE IF NOT EXISTS lead_intakes (
 CREATE INDEX IF NOT EXISTS ix_intakes_case   ON lead_intakes(source, case_number);
 CREATE INDEX IF NOT EXISTS ix_intakes_review ON lead_intakes(senior_review_status, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_intakes_score  ON lead_intakes(lead_score DESC);
+
+-- Invoices: one row per invoice issued by PSS. Tied back to a violation
+-- (source, case_number) when the work came out of the lead pipeline, and
+-- optionally to the pipeline_event that captured the signed contract.
+-- Line items live as JSON so we don't need a separate child table for v1.
+CREATE TABLE IF NOT EXISTS invoices (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_number       TEXT NOT NULL UNIQUE,    -- e.g. PSS-2026-0001
+    source               TEXT,                    -- nullable: invoice may not tie to a case
+    case_number          TEXT,
+    contract_event_id    INTEGER,                 -- pipeline_events.id when generated from a contract
+
+    -- Bill-to
+    client_name          TEXT NOT NULL,
+    client_address       TEXT,                    -- mailing street (line 1)
+    client_city          TEXT,
+    client_state         TEXT,
+    client_zip           TEXT,
+    client_email         TEXT,
+    client_phone         TEXT,
+
+    -- Property the work concerns (often == case property; explicit so manual
+    -- invoices outside the lead flow still capture it)
+    property_address     TEXT,                    -- property street (line 1)
+    property_city        TEXT,
+    property_state       TEXT,
+    property_zip         TEXT,
+
+    -- Money
+    line_items           TEXT NOT NULL,           -- JSON: [{description, quantity, unit_price, amount}, ...]
+    subtotal             REAL NOT NULL DEFAULT 0,
+    tax_rate             REAL NOT NULL DEFAULT 0, -- e.g. 0.07 for 7%
+    tax_amount           REAL NOT NULL DEFAULT 0,
+    total                REAL NOT NULL DEFAULT 0,
+    amount_paid          REAL NOT NULL DEFAULT 0,
+
+    -- Lifecycle
+    status               TEXT NOT NULL DEFAULT 'draft',   -- draft | sent | paid | partial | overdue | void
+    issued_at            TEXT,                    -- when status moved to 'sent'
+    due_at               TEXT,                    -- ISO date
+    paid_at              TEXT,                    -- when fully paid
+    payment_method       TEXT,                    -- 'zelle' | 'check' | 'cash' | 'card' | 'other'
+    payment_reference    TEXT,                    -- check #, txn id, etc.
+
+    -- Free-form
+    notes                TEXT,                    -- internal notes (NOT printed)
+    terms                TEXT,                    -- printed on invoice ("Net 30", "Due on receipt")
+
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL,
+
+    FOREIGN KEY (source, case_number) REFERENCES violations(source, case_number),
+    FOREIGN KEY (contract_event_id)   REFERENCES pipeline_events(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_invoices_status   ON invoices(status, due_at);
+CREATE INDEX IF NOT EXISTS ix_invoices_case     ON invoices(source, case_number);
+CREATE INDEX IF NOT EXISTS ix_invoices_number   ON invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS ix_invoices_created  ON invoices(created_at DESC);
+
+-- Reusable contract templates (services description + terms & conditions).
+-- One can be marked as the default for new estimates and/or new invoices.
+CREATE TABLE IF NOT EXISTS contracts (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    name                 TEXT NOT NULL,
+    details              TEXT,                    -- full body: services + terms + warranties
+    is_default_estimate  INTEGER NOT NULL DEFAULT 0,
+    is_default_invoice   INTEGER NOT NULL DEFAULT 0,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_contracts_name ON contracts(name);
 """
 
 
@@ -196,6 +269,7 @@ def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
         _migrate_lead_intakes(conn)
+        _migrate_invoices(conn)
 
 
 def _migrate_lead_intakes(conn) -> None:
@@ -212,6 +286,23 @@ def _migrate_lead_intakes(conn) -> None:
     for col, ddl in additions:
         if col not in existing:
             conn.execute(f"ALTER TABLE lead_intakes ADD COLUMN {col} {ddl}")
+
+
+def _migrate_invoices(conn) -> None:
+    """Idempotent column adds for the invoices table."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(invoices)")}
+    additions = [
+        ("client_city",    "TEXT"),
+        ("client_state",   "TEXT"),
+        ("client_zip",     "TEXT"),
+        ("property_city",  "TEXT"),
+        ("property_state", "TEXT"),
+        ("property_zip",   "TEXT"),
+        ("contract_id",    "INTEGER"),  # FK -> contracts.id, nullable
+    ]
+    for col, ddl in additions:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE invoices ADD COLUMN {col} {ddl}")
 
 
 # Columns we accept on upsert (everything except lob_* which is set later)

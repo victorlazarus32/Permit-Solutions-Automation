@@ -1,0 +1,399 @@
+<!--
+  Permit Solutions Services — Invoice PDF.
+
+  Brand identity matches the violation letter (Inter wordmark, restrained
+  orange accent, institutional / compliance-firm aesthetic).
+
+  Rendered server-side via Chromium/Playwright in scripts/render_invoice_to_pdf.py
+  -- not via Lob (these are emailed / downloaded, not mailed).
+
+  Merge fields are populated by app/server.py before render.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Invoice {{ invoice_number }} — Permit Solutions Services</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  @page {
+    size: letter;
+    margin: 0.6in 0 0.6in 0;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #111;
+    font-weight: 400;
+  }
+  .page { padding: 0.35in 0.75in 0 0.75in; }
+
+  /* ===== Header ===== */
+  .header {
+    display: table;
+    width: 100%;
+    margin-bottom: 0;
+  }
+  .header .brand {
+    display: table-cell;
+    vertical-align: top;
+    text-align: left;
+    width: 58%;
+    padding-right: 18pt;
+  }
+  .header .meta {
+    display: table-cell;
+    vertical-align: top;
+    text-align: right;
+    width: 42%;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    color: #4b5563;
+    letter-spacing: 0.01em;
+  }
+  .wordmark {
+    font-weight: 700;
+    font-size: 15.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #0b1220;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  .tagline {
+    margin-top: 5pt;
+    font-size: 8pt;
+    letter-spacing: 0.06em;
+    color: #4b5563;
+    white-space: nowrap;
+  }
+  .doctype {
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 11pt;
+    color: #c2410c;
+    font-weight: 600;
+    margin-bottom: 2pt;
+  }
+  .invoice-number {
+    font-weight: 600;
+    color: #111;
+    font-size: 11pt;
+    letter-spacing: 0.04em;
+  }
+  .invoice-meta-line { display: block; color: #6b7280; font-size: 9pt; }
+
+  hr.accent {
+    border: 0;
+    border-top: 1.25pt solid #c2410c;
+    margin: 9pt 0 18pt 0;
+  }
+
+  /* ===== Parties + dates ===== */
+  .parties {
+    display: table;
+    width: 100%;
+    margin-bottom: 20pt;
+  }
+  .parties .col {
+    display: table-cell;
+    vertical-align: top;
+    width: 50%;
+    padding-right: 12pt;
+  }
+  .parties .col + .col { padding-right: 0; padding-left: 12pt; }
+  .col-label {
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 4pt;
+  }
+  .col-body { font-size: 10pt; color: #111; }
+  .col-body .name { font-weight: 500; }
+  .col-body .line { display: block; }
+
+  .dates {
+    display: table;
+    width: 100%;
+    margin-bottom: 22pt;
+    border-top: 0.5pt solid #e5e7eb;
+    border-bottom: 0.5pt solid #e5e7eb;
+    padding: 8pt 0;
+  }
+  .dates .dcell {
+    display: table-cell;
+    vertical-align: top;
+    width: 33.333%;
+    padding-right: 12pt;
+  }
+  .dates .dcell:last-child { padding-right: 0; }
+  .dates .d-label {
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 3pt;
+  }
+  .dates .d-value { font-size: 10pt; color: #111; font-weight: 500; }
+
+  /* ===== Line items table ===== */
+  table.items {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14pt;
+  }
+  table.items thead th {
+    text-align: left;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b7280;
+    padding: 6pt 6pt 6pt 0;
+    border-bottom: 1pt solid #111;
+  }
+  table.items thead th.num { text-align: right; }
+  table.items tbody td {
+    padding: 9pt 6pt 9pt 0;
+    border-bottom: 0.5pt solid #e5e7eb;
+    vertical-align: top;
+    font-size: 10pt;
+  }
+  table.items tbody td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  table.items tbody td.desc { width: 60%; }
+
+  /* ===== Totals box ===== */
+  .totals {
+    width: 50%;
+    margin-left: auto;
+    margin-bottom: 24pt;
+  }
+  .totals table { width: 100%; border-collapse: collapse; }
+  .totals td {
+    padding: 4pt 0;
+    font-size: 10pt;
+    vertical-align: top;
+  }
+  .totals td.label { color: #4b5563; }
+  .totals td.amount { text-align: right; font-variant-numeric: tabular-nums; }
+  .totals tr.total td {
+    border-top: 1pt solid #111;
+    padding-top: 8pt;
+    font-weight: 700;
+    font-size: 11pt;
+  }
+  .totals tr.balance td {
+    padding-top: 6pt;
+    color: #c2410c;
+    font-weight: 600;
+  }
+
+  /* ===== Terms + notes ===== */
+  .terms-block {
+    margin-bottom: 18pt;
+    padding: 10pt 12pt;
+    background: #f9fafb;
+    border-left: 2pt solid #c2410c;
+    font-size: 9.5pt;
+    color: #374151;
+  }
+  .terms-block .tb-label {
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6b7280;
+    display: block;
+    margin-bottom: 3pt;
+  }
+
+  /* ===== Footer ===== */
+  .footer {
+    text-align: center;
+    font-size: 7.5pt;
+    letter-spacing: 0.12em;
+    color: #6b7280;
+    margin-top: 24pt;
+    padding-top: 7pt;
+    border-top: 0.4pt solid #d1d5db;
+    text-transform: uppercase;
+  }
+  .footer .url {
+    display: block;
+    margin-top: 3pt;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: #4b5563;
+  }
+
+  /* ===== Paid stamp ===== */
+  .paid-stamp {
+    position: absolute;
+    top: 2.2in;
+    right: 1.2in;
+    border: 3pt solid #16a34a;
+    color: #16a34a;
+    font-weight: 700;
+    font-size: 28pt;
+    letter-spacing: 0.18em;
+    padding: 8pt 22pt;
+    transform: rotate(-12deg);
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  {% if status == 'paid' %}<div class="paid-stamp">Paid</div>{% endif %}
+
+  <div class="header">
+    <div class="brand">
+      <div class="wordmark">Permit Solutions</div>
+      <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+    </div>
+    <div class="meta">
+      <div class="doctype">Invoice</div>
+      <div class="invoice-number">{{ invoice_number }}</div>
+      <span class="invoice-meta-line">305-600-9422</span>
+      <span class="invoice-meta-line">help@permitsolutions.us</span>
+      <span class="invoice-meta-line">www.permitsolutions.us</span>
+    </div>
+  </div>
+  <hr class="accent">
+
+  <div class="parties">
+    <div class="col">
+      <div class="col-label">From</div>
+      <div class="col-body">
+        <span class="name line">Permit Solutions Services</span>
+        <span class="line">12973 SW 112th St # 161</span>
+        <span class="line">Miami, FL 33186</span>
+      </div>
+    </div>
+    {% set bill_csz = ((client_city or '') ~ (', ' if client_city and client_state else '') ~ (client_state or '') ~ (' ' if (client_state or client_city) and client_zip else '') ~ (client_zip or '')) %}
+    {% set prop_csz = ((property_city or '') ~ (', ' if property_city and property_state else '') ~ (property_state or '') ~ (' ' if (property_state or property_city) and property_zip else '') ~ (property_zip or '')) %}
+    <div class="col">
+      <div class="col-label">Bill To</div>
+      <div class="col-body">
+        <span class="name line">{{ client_name }}</span>
+        {% if client_address %}<span class="line">{{ client_address }}</span>{% endif %}
+        {% if bill_csz.strip() %}<span class="line">{{ bill_csz }}</span>{% endif %}
+        {% if client_phone   %}<span class="line">{{ client_phone }}</span>{% endif %}
+        {% if client_email   %}<span class="line">{{ client_email }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="dates">
+    <div class="dcell">
+      <div class="d-label">Issued</div>
+      <div class="d-value">{{ issued_display or '—' }}</div>
+    </div>
+    <div class="dcell">
+      <div class="d-label">Due</div>
+      <div class="d-value">{{ due_display or terms or '—' }}</div>
+    </div>
+    {% if property_address or prop_csz.strip() %}
+    <div class="dcell">
+      <div class="d-label">Property</div>
+      <div class="d-value">
+        {% if property_address %}{{ property_address }}{% endif %}
+        {% if property_address and prop_csz.strip() %}<br>{% endif %}
+        {% if prop_csz.strip() %}{{ prop_csz }}{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="desc">Description</th>
+        <th class="num">Qty</th>
+        <th class="num">Rate</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in line_items %}
+      <tr>
+        <td class="desc">{{ it.description }}</td>
+        <td class="num">{{ '{:g}'.format(it.quantity) }}</td>
+        <td class="num">${{ '{:,.2f}'.format(it.unit_price) }}</td>
+        <td class="num">${{ '{:,.2f}'.format(it.amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <table>
+      <tr>
+        <td class="label">Subtotal</td>
+        <td class="amount">${{ '{:,.2f}'.format(subtotal) }}</td>
+      </tr>
+      {% if tax_amount > 0 %}
+      <tr>
+        <td class="label">Tax ({{ '{:.2%}'.format(tax_rate) }})</td>
+        <td class="amount">${{ '{:,.2f}'.format(tax_amount) }}</td>
+      </tr>
+      {% endif %}
+      <tr class="total">
+        <td class="label">Total</td>
+        <td class="amount">${{ '{:,.2f}'.format(total) }}</td>
+      </tr>
+      {% if amount_paid > 0 %}
+      <tr>
+        <td class="label">Amount Paid</td>
+        <td class="amount">-${{ '{:,.2f}'.format(amount_paid) }}</td>
+      </tr>
+      <tr class="balance">
+        <td class="label">Balance Due</td>
+        <td class="amount">${{ '{:,.2f}'.format(balance_due) }}</td>
+      </tr>
+      {% endif %}
+    </table>
+  </div>
+
+  {% if terms or payment_instructions %}
+  <div class="terms-block">
+    {% if terms %}
+    <span class="tb-label">Terms</span>
+    <div>{{ terms }}</div>
+    {% endif %}
+    {% if payment_instructions %}
+    <span class="tb-label" style="margin-top: 6pt;">Payment</span>
+    <div>{{ payment_instructions }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if contract_details %}
+  <div class="terms-block" style="page-break-inside: avoid;">
+    <span class="tb-label">{{ contract_name or 'Services &amp; Conditions' }}</span>
+    <div style="white-space: pre-wrap;">{{ contract_details }}</div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    Florida Licensed &nbsp;·&nbsp; Insured &nbsp;·&nbsp; Miami-Dade Permit Specialists
+    <span class="url">www.permitsolutions.us</span>
+  </div>
+
+</div>
+
+</body>
+</html>

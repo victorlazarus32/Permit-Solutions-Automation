@@ -27,6 +27,12 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TEMPLATE = PROJECT_ROOT / "templates" / "violation_letter_en.html"
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(PROJECT_ROOT / ".env")
+except ImportError:
+    pass
+
 LOB_API_BASE = "https://api.lob.com/v1"
 
 
@@ -73,10 +79,10 @@ def main() -> int:
         sys.stderr.write(f"ERROR: template not found: {args.template}\n")
         return 1
 
-    print(f"Uploading {args.template} → Lob …")
+    print(f"Uploading {args.template} to Lob ...")
     resp = upload(args.template, args.description, api_key)
     print()
-    print(f"✓ Uploaded.")
+    print("OK Uploaded.")
     print(f"  template ID:  {resp.get('id')}")
     print(f"  description:  {resp.get('description')}")
     print(f"  versions:     {resp.get('versions') or 'see dashboard'}")

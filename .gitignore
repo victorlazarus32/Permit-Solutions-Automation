@@ -17,10 +17,16 @@ data/*.txt
 data/.morning_run.lock
 data/leads_for_review_*
 audit/*/
+audit/local_*
+audit/lob_template.html
 inbox/*/*.xls
 inbox/*/*.xlsx
 inbox/processed/*/*.xls
 inbox/processed/*/*.xlsx
+
+# Tools / local binaries — don't commit
+cloudflared*.exe
+cloudflared-windows-*
 
 # Logs
 logs/

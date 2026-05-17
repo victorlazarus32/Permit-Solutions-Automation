@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}{{ inv.invoice_number }} | Invoice{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb">
+        <a href="{{ url_for('invoices_list') }}">Invoices</a> ·
+        <span class="mono">{{ inv.invoice_number }}</span>
+      </p>
+      <h1>{{ inv.client_name }}</h1>
+      <p class="hero-sub">
+        <span class="mono">{{ inv.invoice_number }}</span>
+        &nbsp;·&nbsp; Created {{ inv.created_at[:10] }}
+        {% if inv.case_number %}&nbsp;·&nbsp; case <a class="mono" href="{{ url_for('lead_detail', source=inv.source, case_number=inv.case_number) }}">{{ inv.case_number }}</a>{% endif %}
+      </p>
+    </div>
+    <div class="lead-hero-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+      <span class="status status-{{ inv.status }}">{{ inv.status|upper }}</span>
+      {% if inv.is_overdue %}<span class="status status-overdue">OVERDUE</span>{% endif %}
+      <a class="btn-secondary" href="{{ url_for('invoice_pdf', invoice_id=inv.id) }}" target="_blank">View PDF</a>
+      <a class="btn-secondary" download href="{{ url_for('invoice_pdf', invoice_id=inv.id) }}">Download</a>
+    </div>
+  </div>
+</section>
+
+<div class="lead-grid">
+
+  {# ===== LEFT: invoice contents ===== #}
+  <div class="lead-col">
+
+    {% set bill_csz = ((inv.client_city or '') ~ (', ' if inv.client_city and inv.client_state else '') ~ (inv.client_state or '') ~ (' ' if (inv.client_state or inv.client_city) and inv.client_zip else '') ~ (inv.client_zip or '')) %}
+    {% set prop_csz = ((inv.property_city or '') ~ (', ' if inv.property_city and inv.property_state else '') ~ (inv.property_state or '') ~ (' ' if (inv.property_state or inv.property_city) and inv.property_zip else '') ~ (inv.property_zip or '')) %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Bill To</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Name</span><span class="v">{{ inv.client_name }}</span></div>
+        {% if inv.client_address %}<div class="kv"><span class="k">Street</span><span class="v">{{ inv.client_address }}</span></div>{% endif %}
+        {% if bill_csz.strip() %}<div class="kv"><span class="k">City/State/Zip</span><span class="v">{{ bill_csz }}</span></div>{% endif %}
+        {% if inv.client_phone   %}<div class="kv"><span class="k">Phone</span><span class="v mono">{{ inv.client_phone }}</span></div>{% endif %}
+        {% if inv.client_email   %}<div class="kv"><span class="k">Email</span><span class="v mono">{{ inv.client_email }}</span></div>{% endif %}
+      </div>
+    </div>
+    {% if inv.property_address or prop_csz.strip() %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Property</h3>
+      <div class="lead-kv">
+        {% if inv.property_address %}<div class="kv"><span class="k">Street</span><span class="v">{{ inv.property_address }}</span></div>{% endif %}
+        {% if prop_csz.strip() %}<div class="kv"><span class="k">City/State/Zip</span><span class="v">{{ prop_csz }}</span></div>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if attached_contract %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Contract: {{ attached_contract.name }}</h3>
+      <div style="white-space: pre-wrap; font-size: 0.92rem; color: var(--ink-mute); max-height: 240px; overflow-y: auto; padding: 4px;">
+        {{ attached_contract.details or '(no body)' }}
+      </div>
+      <p style="margin-top: 8px; font-size: 0.85rem;">
+        <a href="{{ url_for('contract_edit', contract_id=attached_contract.id) }}">Edit this contract</a>
+      </p>
+    </div>
+    {% endif %}
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Line Items</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="num">Qty</th>
+            <th class="num">Rate</th>
+            <th class="num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in line_items %}
+          <tr>
+            <td>{{ it.description }}</td>
+            <td class="num">{{ '{:g}'.format(it.quantity) }}</td>
+            <td class="num">${{ '{:,.2f}'.format(it.unit_price) }}</td>
+            <td class="num">${{ '{:,.2f}'.format(it.amount) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="3" class="num">Subtotal</td><td class="num">${{ '{:,.2f}'.format(inv.subtotal) }}</td></tr>
+          {% if inv.tax_amount %}
+          <tr><td colspan="3" class="num">Tax ({{ '{:.2%}'.format(inv.tax_rate) }})</td><td class="num">${{ '{:,.2f}'.format(inv.tax_amount) }}</td></tr>
+          {% endif %}
+          <tr><td colspan="3" class="num"><strong>Total</strong></td><td class="num"><strong>${{ '{:,.2f}'.format(inv.total) }}</strong></td></tr>
+          {% if inv.amount_paid %}
+          <tr><td colspan="3" class="num">Paid</td><td class="num">-${{ '{:,.2f}'.format(inv.amount_paid) }}</td></tr>
+          <tr><td colspan="3" class="num" style="color: var(--brand-orange);"><strong>Balance due</strong></td><td class="num" style="color: var(--brand-orange);"><strong>${{ '{:,.2f}'.format(inv.balance_due) }}</strong></td></tr>
+          {% endif %}
+        </tfoot>
+      </table>
+    </div>
+
+    {% if inv.notes %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Internal Notes</h3>
+      <p style="white-space: pre-wrap;">{{ inv.notes }}</p>
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ===== RIGHT: status + actions ===== #}
+  <div class="lead-col">
+
+    <div class="lead-card">
+      <h3 class="lead-card-title">Status & Dates</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ inv.status }}">{{ inv.status|upper }}</span></span></div>
+        <div class="kv"><span class="k">Issued</span><span class="v">{{ inv.issued_at[:10] if inv.issued_at else '—' }}</span></div>
+        <div class="kv"><span class="k">Due</span><span class="v">{{ inv.due_at or '—' }}</span></div>
+        {% if inv.paid_at %}<div class="kv"><span class="k">Paid</span><span class="v">{{ inv.paid_at[:10] }}</span></div>{% endif %}
+        {% if inv.payment_method %}<div class="kv"><span class="k">Method</span><span class="v">{{ inv.payment_method }}</span></div>{% endif %}
+        {% if inv.payment_reference %}<div class="kv"><span class="k">Reference</span><span class="v mono">{{ inv.payment_reference }}</span></div>{% endif %}
+      </div>
+    </div>
+
+    {% if inv.status == 'draft' %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Actions</h3>
+      <a class="btn-secondary" href="{{ url_for('invoice_edit', invoice_id=inv.id) }}" style="display: block; margin-bottom: 8px;">Edit invoice</a>
+      <form method="POST" action="{{ url_for('invoice_mark_sent', invoice_id=inv.id) }}">
+        <button type="submit" class="btn-primary" style="width: 100%;">Mark as sent</button>
+      </form>
+      <p class="lead-card-desc" style="margin-top: 8px;">Once sent, the invoice is locked. Edits are no longer possible — void and reissue instead.</p>
+    </div>
+    {% endif %}
+
+    {% if inv.status in ('sent', 'partial') %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Record Payment</h3>
+      <form method="POST" action="{{ url_for('invoice_record_payment', invoice_id=inv.id) }}">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="amount">Amount ($)</label>
+            <input type="text" name="amount" id="amount" inputmode="decimal" required
+                   value="{{ '{:.2f}'.format(inv.balance_due) }}">
+          </div>
+          <div class="form-field">
+            <label for="method">Method</label>
+            <select name="method" id="method">
+              <option value="zelle">Zelle</option>
+              <option value="check">Check</option>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-field">
+            <label for="reference">Reference (check #, txn id...)</label>
+            <input type="text" name="reference" id="reference">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">Record payment</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if inv.status != 'void' %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Void Invoice</h3>
+      <p class="lead-card-desc">Voids cannot be undone. Use this for canceled work, duplicate invoices, or billing errors.</p>
+      <form method="POST" action="{{ url_for('invoice_void', invoice_id=inv.id) }}"
+            onsubmit="return confirm('Void invoice {{ inv.invoice_number }}? This cannot be undone.');">
+        <div class="form-row single">
+          <div class="form-field">
+            <label for="reason">Reason</label>
+            <input type="text" name="reason" id="reason" placeholder="e.g. duplicate, cancelled">
+          </div>
+        </div>
+        <button type="submit" class="btn-secondary" style="background: var(--red-soft); color: var(--red); border-color: var(--red);">Void</button>
+      </form>
+    </div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+<style>
+  table.data-table { width: 100%; border-collapse: collapse; }
+  table.data-table th, table.data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table.data-table th { text-align: left; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); }
+  table.data-table th.num, table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.data-table tfoot td { border-bottom: 0; }
+  .status-draft   { background: var(--bg-soft);     color: var(--ink-mute); }
+  .status-sent    { background: var(--blue-soft);   color: var(--blue); }
+  .status-partial { background: var(--amber-soft);  color: var(--amber); }
+  .status-paid    { background: var(--emerald-soft); color: var(--emerald); }
+  .status-void    { background: #f3f4f6;            color: #6b7280; text-decoration: line-through; }
+  .status-overdue { background: var(--red-soft);    color: var(--red); }
+</style>
+
+{% endblock %}

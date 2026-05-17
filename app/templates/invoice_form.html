@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}{% if invoice %}Edit {{ invoice.invoice_number }}{% else %}New Invoice{% endif %}{% endblock %}
+
+{% block content %}
+
+{% set is_edit = invoice is not none %}
+{% set p = prefill if not is_edit else {} %}
+
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb">
+        <a href="{{ url_for('invoices_list') }}">Invoices</a> ·
+        {% if is_edit %}<a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a> · Edit{% else %}New{% endif %}
+      </p>
+      <h1>{% if is_edit %}Edit invoice{% else %}New invoice{% endif %}</h1>
+      {% if p.case_number %}
+      <p class="hero-sub">Prefilled from case <span class="mono">{{ p.case_number }}</span></p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<form method="POST" class="lead-card" id="invoice-form" style="max-width: 980px; margin-bottom: 1rem;">
+  {% if is_edit %}{# editing keeps source/case/event linkage from the DB row #}{% endif %}
+  {% if not is_edit and p.source %}<input type="hidden" name="source" value="{{ p.source }}">{% endif %}
+  {% if not is_edit and p.case_number %}<input type="hidden" name="case_number" value="{{ p.case_number }}">{% endif %}
+  {% if not is_edit and p.contract_event_id %}<input type="hidden" name="contract_event_id" value="{{ p.contract_event_id }}">{% endif %}
+
+  <h3 class="lead-card-title">Property</h3>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="property_address">Property street address (printed on invoice)</label>
+      <input type="text" name="property_address" id="property_address"
+             value="{{ invoice.property_address if is_edit else p.property_address or '' }}">
+    </div>
+  </div>
+  <div class="form-row addr-csz">
+    <div class="form-field">
+      <label for="property_city">City</label>
+      <input type="text" name="property_city" id="property_city"
+             value="{{ invoice.property_city if is_edit else p.property_city or '' }}">
+    </div>
+    <div class="form-field" style="max-width: 110px;">
+      <label for="property_state">State</label>
+      <input type="text" name="property_state" id="property_state" maxlength="2"
+             value="{{ invoice.property_state if is_edit else p.property_state or 'FL' }}">
+    </div>
+    <div class="form-field" style="max-width: 150px;">
+      <label for="property_zip">Zip</label>
+      <input type="text" name="property_zip" id="property_zip" maxlength="10"
+             value="{{ invoice.property_zip if is_edit else p.property_zip or '' }}">
+    </div>
+  </div>
+
+  <h3 class="lead-card-title" style="margin-top: 1.5rem;">Bill To</h3>
+  <div class="form-row">
+    <div class="form-field">
+      <label for="client_name">Client name <span style="color: var(--red);">*</span></label>
+      <input type="text" name="client_name" id="client_name" required
+             value="{{ invoice.client_name if is_edit else p.client_name or '' }}">
+    </div>
+    <div class="form-field">
+      <label for="client_phone">Phone</label>
+      <input type="text" name="client_phone" id="client_phone"
+             value="{{ invoice.client_phone if is_edit else p.client_phone or '' }}">
+    </div>
+  </div>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="client_email">Email</label>
+      <input type="email" name="client_email" id="client_email"
+             value="{{ invoice.client_email if is_edit else p.client_email or '' }}">
+    </div>
+  </div>
+  <div class="form-row single" style="margin-top: 4px;">
+    <label class="inline-check">
+      <input type="checkbox" id="same_as_property"> Mailing address is the same as the property address
+    </label>
+  </div>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="client_address">Mailing street address</label>
+      <input type="text" name="client_address" id="client_address"
+             value="{{ invoice.client_address if is_edit else p.client_address or '' }}">
+    </div>
+  </div>
+  <div class="form-row addr-csz">
+    <div class="form-field">
+      <label for="client_city">City</label>
+      <input type="text" name="client_city" id="client_city"
+             value="{{ invoice.client_city if is_edit else p.client_city or '' }}">
+    </div>
+    <div class="form-field" style="max-width: 110px;">
+      <label for="client_state">State</label>
+      <input type="text" name="client_state" id="client_state" maxlength="2"
+             value="{{ invoice.client_state if is_edit else p.client_state or 'FL' }}">
+    </div>
+    <div class="form-field" style="max-width: 150px;">
+      <label for="client_zip">Zip</label>
+      <input type="text" name="client_zip" id="client_zip" maxlength="10"
+             value="{{ invoice.client_zip if is_edit else p.client_zip or '' }}">
+    </div>
+  </div>
+
+  <h3 class="lead-card-title" style="margin-top: 1.5rem;">Line items</h3>
+  <table class="line-items" id="line-items">
+    <thead>
+      <tr>
+        <th style="width: 60%;">Description</th>
+        <th style="width: 8%;">Qty</th>
+        <th style="width: 14%;">Rate ($)</th>
+        <th style="width: 14%;">Amount</th>
+        <th style="width: 4%;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set rows_to_render = invoice_line_items if is_edit else [] %}
+      {% if not is_edit and p.suggested_amount %}
+        {% set rows_to_render = [{'description': p.suggested_description, 'quantity': 1, 'unit_price': p.suggested_amount, 'amount': p.suggested_amount}] %}
+      {% endif %}
+      {% if rows_to_render %}
+        {% for li in rows_to_render %}
+        <tr class="line-row">
+          <td><input type="text" name="line_description" value="{{ li.description }}" placeholder="Service description"></td>
+          <td><input type="text" name="line_quantity"    value="{{ '{:g}'.format(li.quantity) }}" inputmode="decimal"></td>
+          <td><input type="text" name="line_unit_price"  value="{{ '{:.2f}'.format(li.unit_price) }}" inputmode="decimal"></td>
+          <td class="line-amount num">${{ '{:,.2f}'.format(li.amount) }}</td>
+          <td><button type="button" class="btn-link line-remove" title="Remove">×</button></td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr class="line-row">
+          <td><input type="text" name="line_description" placeholder="Service description"></td>
+          <td><input type="text" name="line_quantity"   value="1" inputmode="decimal"></td>
+          <td><input type="text" name="line_unit_price" value="" inputmode="decimal"></td>
+          <td class="line-amount num">$0.00</td>
+          <td><button type="button" class="btn-link line-remove" title="Remove">×</button></td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  <button type="button" id="add-line" class="btn-secondary" style="margin-top: 8px;">+ Add line</button>
+
+  <div class="totals-grid" style="margin-top: 1.5rem; display: grid; grid-template-columns: 1fr 280px; gap: 1.5rem; align-items: start;">
+    <div>
+      <div class="form-row">
+        <div class="form-field">
+          <label for="due_at">Due date</label>
+          <input type="date" name="due_at" id="due_at"
+                 value="{{ invoice.due_at if is_edit and invoice.due_at else '' }}">
+        </div>
+        <div class="form-field">
+          <label for="terms">Terms (printed)</label>
+          <input type="text" name="terms" id="terms"
+                 value="{{ invoice.terms if is_edit else 'Due on receipt' }}">
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-field">
+          <label for="contract_id">Contract (services &amp; terms printed on invoice)</label>
+          {% if contracts_available %}
+            {% set picked_id = invoice.contract_id if is_edit else (default_invoice_contract.id if default_invoice_contract else None) %}
+            <select name="contract_id" id="contract_id">
+              <option value="">— None —</option>
+              {% for c in contracts_available %}
+                <option value="{{ c.id }}" {% if picked_id and picked_id == c.id %}selected{% endif %}>
+                  {{ c.name }}{% if c.is_default_invoice %} (default){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <p style="font-size: 0.9rem; color: var(--ink-mute); margin: 4px 0;">
+              No contracts saved yet. <a href="{{ url_for('contract_new') }}">Create one</a> in Settings to attach it here.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-field">
+          <label for="notes">Internal notes (not printed)</label>
+          <textarea name="notes" id="notes" rows="2">{{ invoice.notes if is_edit else '' }}</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="totals-summary">
+      <div class="tot-row"><span>Subtotal</span><span id="subtotal-display" class="num">$0.00</span></div>
+      <div class="tot-row">
+        <label for="tax_rate" style="margin: 0;">Tax %</label>
+        <input type="text" name="tax_rate" id="tax_rate" inputmode="decimal" style="width: 80px; text-align: right;"
+               value="{{ '{:.2f}'.format((invoice.tax_rate * 100) if is_edit else 0) }}">
+      </div>
+      <div class="tot-row"><span>Tax</span><span id="tax-display" class="num">$0.00</span></div>
+      <div class="tot-row total"><span>Total</span><span id="total-display" class="num">$0.00</span></div>
+    </div>
+  </div>
+
+  <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+    <button type="submit" class="btn-primary">{% if is_edit %}Save changes{% else %}Create draft{% endif %}</button>
+    <a href="{% if is_edit %}{{ url_for('invoice_detail', invoice_id=invoice.id) }}{% else %}{{ url_for('invoices_list') }}{% endif %}" class="btn-secondary">Cancel</a>
+  </div>
+</form>
+
+<style>
+  table.line-items { width: 100%; border-collapse: collapse; }
+  table.line-items th {
+    text-align: left; padding: 6px 8px;
+    font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute);
+    border-bottom: 1px solid var(--border);
+  }
+  table.line-items td { padding: 6px 8px; vertical-align: middle; }
+  table.line-items td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.line-items input[type="text"] { width: 100%; padding: 6px 8px; }
+  .line-remove {
+    color: var(--ink-mute); font-size: 1.2rem; cursor: pointer; background: none; border: none;
+  }
+  .line-remove:hover { color: var(--red); }
+  .totals-summary {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+  }
+  .tot-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; font-size: 0.95rem;
+  }
+  .tot-row.total {
+    border-top: 1px solid var(--ink); margin-top: 8px; padding-top: 10px;
+    font-weight: 700; font-size: 1.1rem;
+  }
+</style>
+
+<script>
+(function() {
+  function parseNum(v) {
+    if (!v) return 0;
+    var n = parseFloat(String(v).replace(/[$,\s]/g, ''));
+    return isNaN(n) ? 0 : n;
+  }
+  function fmt(n) {
+    return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function recomputeRow(row) {
+    var qty   = parseNum(row.querySelector('input[name="line_quantity"]').value);
+    var rate  = parseNum(row.querySelector('input[name="line_unit_price"]').value);
+    var amt   = qty * rate;
+    row.querySelector('.line-amount').textContent = fmt(amt);
+    return amt;
+  }
+  function recomputeAll() {
+    var subtotal = 0;
+    document.querySelectorAll('#line-items .line-row').forEach(function(row) {
+      subtotal += recomputeRow(row);
+    });
+    var taxPct = parseNum(document.getElementById('tax_rate').value);
+    var tax    = +(subtotal * (taxPct / 100)).toFixed(2);
+    var total  = subtotal + tax;
+    document.getElementById('subtotal-display').textContent = fmt(subtotal);
+    document.getElementById('tax-display').textContent      = fmt(tax);
+    document.getElementById('total-display').textContent    = fmt(total);
+  }
+  function makeRowTemplate() {
+    var tr = document.createElement('tr');
+    tr.className = 'line-row';
+    tr.innerHTML =
+      '<td><input type="text" name="line_description" placeholder="Service description"></td>' +
+      '<td><input type="text" name="line_quantity" value="1" inputmode="decimal"></td>' +
+      '<td><input type="text" name="line_unit_price" value="" inputmode="decimal"></td>' +
+      '<td class="line-amount num">$0.00</td>' +
+      '<td><button type="button" class="btn-link line-remove" title="Remove">×</button></td>';
+    return tr;
+  }
+
+  document.getElementById('line-items').addEventListener('input', recomputeAll);
+  document.getElementById('tax_rate').addEventListener('input', recomputeAll);
+
+  document.getElementById('add-line').addEventListener('click', function() {
+    var tbody = document.querySelector('#line-items tbody');
+    tbody.appendChild(makeRowTemplate());
+    recomputeAll();
+  });
+
+  document.getElementById('line-items').addEventListener('click', function(e) {
+    if (e.target.classList.contains('line-remove')) {
+      var rows = document.querySelectorAll('#line-items .line-row');
+      if (rows.length > 1) {
+        e.target.closest('tr').remove();
+        recomputeAll();
+      }
+    }
+  });
+
+  recomputeAll();
+})();
+</script>
+
+<script>
+(function() {
+  // "Same as property address" checkbox: copy the property fields into the
+  // mailing fields and lock them. Untick to edit them separately.
+  var box = document.getElementById('same_as_property');
+  if (!box) return;
+  var PAIRS = [
+    ['property_address', 'client_address'],
+    ['property_city',    'client_city'],
+    ['property_state',   'client_state'],
+    ['property_zip',     'client_zip'],
+  ];
+  function srcEl(name) { return document.getElementById(name); }
+  function dstEl(name) { return document.getElementById(name); }
+
+  function syncFromProperty() {
+    PAIRS.forEach(function(p) {
+      var src = srcEl(p[0]);
+      var dst = dstEl(p[1]);
+      if (!src || !dst) return;
+      dst.value = src.value;
+    });
+  }
+  function setLocked(locked) {
+    PAIRS.forEach(function(p) {
+      var dst = dstEl(p[1]);
+      if (!dst) return;
+      dst.readOnly = locked;
+      dst.style.background = locked ? 'var(--surface-2, #f5f5f5)' : '';
+    });
+  }
+  // Initial state: tick the box if mailing == property on load
+  // (so editing an invoice with matching addresses shows it correctly).
+  var allMatch = PAIRS.every(function(p) {
+    var s = srcEl(p[0]); var d = dstEl(p[1]);
+    return s && d && (s.value || '').trim() === (d.value || '').trim() && (s.value || '').trim() !== '';
+  });
+  if (allMatch) { box.checked = true; setLocked(true); }
+
+  box.addEventListener('change', function() {
+    if (box.checked) {
+      syncFromProperty();
+      setLocked(true);
+    } else {
+      setLocked(false);
+    }
+  });
+  // Keep mailing in sync while ticked and the user edits the property side.
+  PAIRS.forEach(function(p) {
+    var src = srcEl(p[0]);
+    if (!src) return;
+    src.addEventListener('input', function() {
+      if (box.checked) syncFromProperty();
+    });
+  });
+})();
+</script>
+
+<style>
+  .inline-check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.95rem; cursor: pointer; }
+  .inline-check input[type="checkbox"] { width: 16px; height: 16px; }
+  .form-row.addr-csz { display: flex; gap: 12px; align-items: flex-end; }
+  .form-row.addr-csz .form-field { flex: 1; }
+</style>
+
+{% endblock %}

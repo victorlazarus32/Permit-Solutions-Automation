@@ -5,29 +5,31 @@
     Side 1 — English
     Side 2 — Spanish (Caribbean / neutral Latin American)
 
-  Page size: 8.5" x 11" (US Letter). Lob requires 0.5" margins on all sides.
+  Page size: 8.5" x 11" (US Letter). Lob requires 0.5" margins minimum.
 
-  Design language:
-    Body type: Times New Roman, plain (no bold, no italic).
-    Color:     Black on white. The logo itself is the only color on the page.
-    Style:     Government / federal-notice minimalism. Thin horizontal rules
-               separate sections.
+  Design direction (per Victor 2026-05-11):
+    Institutional / compliance-firm aesthetic — Stripe / Procore / CoStar
+    inspired. Black + white + restrained orange accent. Typography-driven
+    identity, no emblem-style logo. Reads like legal correspondence, not a
+    contractor flyer.
 
-  Copy direction (per Victor 2026-04-28):
-    1. Direct opening that names the case, the property, and the violation.
-    2. Outcome-focused service description (speed, simplicity, full resolution).
-    3. Trust anchors: 20+ years, hundreds of cases, local expert.
-    4. Urgency from concrete consequences (fines, liens, sale/refi blocks).
-    5. Reassurance: most issues can be resolved without costly reconstruction
-       if addressed early.
-    6. Easy multi-channel call to action with free consultation.
+  Header structure:
+    Top-left:  "PERMIT SOLUTIONS SERVICES" wordmark + tagline
+    Top-right: contact block (phone / email / web)
+    Thin orange rule below the header
+
+  Footer:
+    "Florida Licensed · Insured · Miami-Dade Permit Specialists"
+    (replaces the prior contractor-license credentials line)
 
   Merge variables (must be present on every API call -- pass "" if unknown):
     Shared:
       {{owner_name}}, {{owner_address_line1}}, {{owner_address_line2}},
-      {{case_number}}, {{property_address}}, {{logo_src}}
+      {{case_number}}, {{property_address}}
     English: {{date}}, {{first_name}}, {{violation_subject}}, {{jurisdiction}}
     Spanish: {{date_es}}, {{first_name_es}}, {{violation_subject_es}}, {{jurisdiction_es}}
+
+  Note: {{logo_src}} is no longer referenced — the wordmark is pure type.
 -->
 <!DOCTYPE html>
 <html>
@@ -35,126 +37,177 @@
 <meta charset="utf-8">
 <title>Permit Solutions Services — Violation Notice</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
   @page {
     size: letter;
-    margin: 0.5in;
+    /* Vertical-only @page margin. Lob's renderer ignores horizontal @page
+       margins, so side margins live in .page padding below. */
+    margin: 0.6in 0 0.6in 0;
   }
   html, body {
     margin: 0;
     padding: 0;
-    font-family: "Times New Roman", Times, serif;
-    font-size: 10.5pt;
-    line-height: 1.35;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
     color: #000;
-    font-weight: normal;
-    font-style: normal;
-  }
-  /* Belt and suspenders: nothing renders bold or italic, anywhere. */
-  *, b, strong, i, em, th, h1, h2, h3, h4 {
-    font-weight: normal;
-    font-style: normal;
+    font-weight: 400;
   }
 
   .page {
-    padding: 0;
+    /* Side margins live here because Lob's renderer ignores horizontal
+       @page margins -- without this, text prints flush to the paper edge.
+       0.85in = narrower body for executive-correspondence scan-line length,
+       still gives the header room. padding-top pushes content down a bit
+       so top whitespace balances better against the bottom. */
+    padding: 0.35in 0.85in 0 0.85in;
   }
 
-  .logo {
-    text-align: center;
-    margin: 0 0 0.03in 0;
+  /* ===== Header ===== */
+  .header {
+    display: table;
+    width: 100%;
+    margin: 0 0 0.04in 0;
   }
-  .logo img {
-    height: 1.5in;
+  .header .brand {
+    display: table-cell;
+    vertical-align: top;
+    text-align: left;
+    width: 70%;
+    padding-right: 18pt;
+  }
+  .header .contact {
+    display: table-cell;
+    vertical-align: top;
+    text-align: right;
+    width: 30%;
+    font-size: 8.5pt;
+    line-height: 1.45;
+    color: #000;
+    letter-spacing: 0.01em;
   }
   .wordmark {
-    text-align: center;
-    font-size: 10.5pt;
-    letter-spacing: 0.22em;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    font-size: 15.5pt;
+    letter-spacing: 0.12em;
     color: #000;
-    margin-bottom: 0.03in;
+    text-transform: uppercase;
+    line-height: 1.1;
+    white-space: nowrap;
   }
-  hr.heavy {
-    border: 0;
-    border-top: 1pt solid #000;
-    margin: 0.04in 0 0.02in 0;
+  .tagline {
+    margin-top: 5pt;
+    font-size: 8pt;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    color: #000;
+    text-transform: none;
+    white-space: nowrap;
   }
-  hr.thin {
+  .contact-line { display: block; }
+
+  hr.accent {
     border: 0;
-    border-top: 0.4pt solid #000;
-    margin: 0.02in 0 0.10in 0;
-  }
-  hr.section {
-    border: 0;
-    border-top: 0.4pt solid #000;
-    margin: 7pt 0 3pt 0;
+    border-top: 1.25pt solid #c2410c;
+    margin: 9pt 0 12pt 0;
   }
 
+  /* ===== Meta row (date + case no.) ===== */
   .meta-row {
     display: table;
     width: 100%;
-    margin: 0.04in 0 0.10in 0;
-    font-size: 10pt;
+    margin: 0 0 12pt 0;
+    font-size: 9pt;
+    color: #000;
   }
-  .meta-row .date    { display: table-cell; text-align: left; }
-  .meta-row .case-no { display: table-cell; text-align: right; }
-  .meta-row .case-no .label { letter-spacing: 0.06em; }
+  .meta-row .date    { display: table-cell; text-align: left; letter-spacing: 0.02em; }
+  .meta-row .case-no { display: table-cell; text-align: right; letter-spacing: 0.04em; }
+  .meta-row .case-no .label { color: #000; }
 
+  /* ===== Recipient ===== */
   .recipient-block {
-    margin-bottom: 0.10in;
+    margin-bottom: 10pt;
   }
   .recipient-block .owner {
     text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 500;
   }
 
   p { margin: 0 0 6pt 0; }
   .salutation { margin-bottom: 6pt; }
 
+  /* ===== Section headings ===== */
   .section-heading {
-    font-size: 10.5pt;
-    letter-spacing: 0.08em;
+    font-size: 8.5pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    margin: 0 0 3pt 0;
+    color: #111;
+    margin: 16pt 0 5pt 0;
   }
 
   ul.outcomes {
-    margin: 0 0 5pt 0;
-    padding-left: 16pt;
+    margin: 0 0 4pt 0;
+    padding-left: 14pt;
     list-style-type: disc;
   }
-  ul.outcomes li { margin-bottom: 2pt; }
+  ul.outcomes li { margin-bottom: 3pt; }
 
-  /* Multi-channel CTA block. */
-  .cta-grid {
-    display: table;
-    width: 100%;
-    margin: 3pt 0 3pt 0;
-    font-size: 10.5pt;
-  }
-  .cta-grid .cta-cell {
-    display: table-cell;
-    text-align: center;
-    padding: 1pt 4pt;
-    width: 33.333%;
-  }
-  .cta-label {
-    letter-spacing: 0.08em;
-    font-size: 9pt;
-    margin-bottom: 1pt;
-  }
-
-  .signoff { margin-top: 6pt; }
-  .signoff .closing { margin-bottom: 10pt; }
-
-  .ps {
-    margin-top: 9pt;
-  }
-  .credentials {
-    text-align: center;
-    font-size: 8.5pt;
-    letter-spacing: 0.04em;
-    margin-top: 12pt;
-    padding-top: 5pt;
+  /* ===== Sign-off ===== */
+  hr.sig-divider {
+    border: 0;
     border-top: 0.4pt solid #000;
+    margin: 22pt 0 14pt 0;
+  }
+  .signoff .closing { margin-bottom: 6pt; }
+  .signoff .signature-img {
+    display: block;
+    height: 0.55in;
+    width: auto;
+    margin: 2pt 0 4pt 0;
+  }
+  /* If no signature PNG is present, signature_src renders empty; hide
+     the <img> so the renderer doesn't show a broken-image icon and the
+     spacing between "Sincerely," and the name stays tight. */
+  .signoff .signature-img[src=""],
+  .signoff .signature-img:not([src]) {
+    display: none;
+  }
+  .signoff .name {
+    font-weight: 600;
+    font-size: 11pt;
+    letter-spacing: 0.02em;
+    color: #000;
+  }
+  .signoff .title {
+    color: #000;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    margin-top: 1pt;
+  }
+
+  .ps { margin-top: 14pt; }
+
+  /* ===== Footer ===== */
+  .footer {
+    text-align: center;
+    font-size: 7.5pt;
+    letter-spacing: 0.12em;
+    color: #000;
+    margin-top: 24pt;
+    padding-top: 7pt;
+    border-top: 0.4pt solid #000;
+    text-transform: uppercase;
+  }
+  .footer .url {
+    display: block;
+    margin-top: 3pt;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: #000;
   }
 
   .page-break {
@@ -165,14 +218,41 @@
 </head>
 <body>
 
+<!--
+  Page-layout strategy with Lob `address_placement: insert_blank_page`:
+
+  Lob prepends its own address page to the mailpiece. With duplex printing
+  (LOB_DOUBLE_SIDED=true), 2 pages-per-sheet means we need an EVEN total
+  page count for English and Spanish to end up on the same physical sheet
+  (English on the front, Spanish on the back). So our template adds a
+  blank page right after Lob's address insert as filler:
+
+    Sheet 1 front: Lob's address page
+    Sheet 1 back:  blank (this filler)
+    Sheet 2 front: English letter
+    Sheet 2 back:  Spanish letter
+-->
+
+<!-- ============== PAGE 0: BLANK FILLER (duplex alignment) ============== -->
+<div class="page" style="height: 9in;">&nbsp;</div>
+
+<div class="page-break"></div>
+
 <!-- ============== PAGE 1: ENGLISH ============== -->
 <div class="page">
 
-  <div class="logo">
-    <img src="{{logo_src}}" alt="Permit Solutions Services">
+  <div class="header">
+    <div class="brand">
+      <div class="wordmark">Permit Solutions</div>
+      <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+    </div>
+    <div class="contact">
+      <span class="contact-line">305-600-9422</span>
+      <span class="contact-line">help@permitsolutions.us</span>
+      <span class="contact-line">www.permitsolutions.us</span>
+    </div>
   </div>
-  <hr class="heavy">
-  <hr class="thin">
+  <hr class="accent">
 
   <div class="meta-row">
     <div class="date">{{date}}</div>
@@ -185,67 +265,50 @@
     <div>{{owner_address_line2}}</div>
   </div>
 
-  <p class="salutation">Hello {{first_name}},</p>
+  <p class="salutation">Dear {{first_name}},</p>
 
-  <p>This letter is about an active code enforcement case on your property at
-  {{property_address}}. {{jurisdiction}} opened reference number
+  <p>This letter concerns an active code enforcement case on your property at
+  {{property_address}}. {{jurisdiction}} has opened reference number
   {{case_number}} for a violation involving your {{violation_subject}}.
-  I'm Victor L. Moreno, a Florida-licensed fence contractor with more than
+  I am Victor L. Moreno, a Florida-licensed fence contractor with more than
   20 years in Miami-Dade construction and the founder of Permit Solutions
   Services. We handle the permit side of code cleanup: paperwork, inspectors,
   permit fees, and official closure with the city. You hire your own licensed
   contractor for the actual repair.</p>
 
-  <hr class="section">
   <div class="section-heading">What We Handle</div>
   <ul class="outcomes">
     <li>Permits and applications. Right form, right department, no rework. We
-    start the day you call.</li>
-    <li>One point of contact with the city. We deal with the inspectors, the
-    paperwork, and the permit fees so you do not have to take time off work
-    or learn the system.</li>
-    <li>Official closure. Once your contractor finishes the repair, we close
+    begin the day you call.</li>
+    <li>A single point of contact with the city. We coordinate inspectors,
+    paperwork, and permit fees so you do not need to take time off work or
+    learn the system.</li>
+    <li>Official closure. Once your contractor completes the repair, we close
     the case with the city and you receive written confirmation.</li>
   </ul>
 
-  <hr class="section">
   <div class="section-heading">Why Timing Matters</div>
   <p>An open code case rarely stays small. Daily fines accrue, and once a lien
   is recorded against your property it clouds the title, blocks refinancing,
   and stops a sale until paid in full. Most violations can be resolved without
-  costly reconstruction if we get involved early. The longer this sits, the
-  more it costs and the fewer options remain.</p>
+  costly reconstruction if addressed early. Delays typically compound
+  reconstruction costs, accumulated penalties, and enforcement exposure.</p>
 
-  <hr class="section">
-  <div class="section-heading">Free 15-Minute Consultation</div>
-  <div class="cta-grid">
-    <div class="cta-cell">
-      <div class="cta-label">CALL OR TEXT</div>
-      305-600-9422
-    </div>
-    <div class="cta-cell">
-      <div class="cta-label">EMAIL</div>
-      help@permitsolutions.us
-    </div>
-    <div class="cta-cell">
-      <div class="cta-label">WEB</div>
-      www.permitsolutions.us
-    </div>
-  </div>
-
+  <hr class="sig-divider">
   <div class="signoff">
     <div class="closing">Sincerely,</div>
+    <img class="signature-img" src="{{signature_src}}" alt="">
     <div class="name">Victor L. Moreno</div>
-    <div class="title">Founder, Permit Solutions Services</div>
+    <div class="title">Founder &amp; Compliance Consultant</div>
   </div>
 
   <p class="ps">P.S. The longer this case stays open, the harder and more
   expensive it gets to clean up. A 15-minute call costs nothing and tells you
   exactly what your case needs.</p>
 
-  <div class="credentials">
-    Florida-Licensed Fence Contractor #08BS00863 &middot; Insured &middot;
-    20+ years in Miami-Dade construction
+  <div class="footer">
+    Florida Licensed &nbsp;·&nbsp; Insured &nbsp;·&nbsp; Miami-Dade Permit Specialists
+    <span class="url">www.permitsolutions.us</span>
   </div>
 
 </div>
@@ -255,11 +318,18 @@
 <!-- ============== PAGE 2: SPANISH ============== -->
 <div class="page">
 
-  <div class="logo">
-    <img src="{{logo_src}}" alt="Permit Solutions Services">
+  <div class="header">
+    <div class="brand">
+      <div class="wordmark">Permit Solutions</div>
+      <div class="tagline">Tramitación de Permisos &nbsp;&bull;&nbsp; Cumplimiento de Códigos &nbsp;&bull;&nbsp; Resolución de Violaciones</div>
+    </div>
+    <div class="contact">
+      <span class="contact-line">305-600-9422</span>
+      <span class="contact-line">help@permitsolutions.us</span>
+      <span class="contact-line">www.permitsolutions.us</span>
+    </div>
   </div>
-  <hr class="heavy">
-  <hr class="thin">
+  <hr class="accent">
 
   <div class="meta-row">
     <div class="date">{{date_es}}</div>
@@ -272,69 +342,53 @@
     <div>{{owner_address_line2}}</div>
   </div>
 
-  <p class="salutation">Hola {{first_name_es}},</p>
+  <p class="salutation">Estimado/a {{first_name_es}},</p>
 
-  <p>Esta carta trata sobre un caso activo de cumplimiento de códigos en su
-  propiedad ubicada en {{property_address}}. {{jurisdiction_es}} abrió el
+  <p>Esta carta se refiere a un caso activo de cumplimiento de códigos en su
+  propiedad ubicada en {{property_address}}. {{jurisdiction_es}} ha abierto el
   número de referencia {{case_number}} por una violación que involucra su
-  {{violation_subject_es}}. Mi nombre es Victor L. Moreno, contratista de
-  cercas con licencia de Florida y con más de 20 años en construcción en
-  Miami-Dade, y fundador de Permit Solutions Services. Nosotros nos encargamos
-  del lado de los permisos en la limpieza de su caso: papeleo, inspectores,
-  tarifas de permisos, y el cierre oficial con la ciudad. Usted contrata a su
-  propio contratista con licencia para la reparación en sí.</p>
+  {{violation_subject_es}}. Soy Victor L. Moreno, contratista de cercas con
+  licencia de Florida y con más de 20 años en construcción en Miami-Dade, y
+  fundador de Permit Solutions Services. Nosotros nos encargamos del lado de
+  los permisos en la limpieza de su caso: papeleo, inspectores, tarifas de
+  permisos, y el cierre oficial con la ciudad. Usted contrata a su propio
+  contratista con licencia para la reparación en sí.</p>
 
-  <hr class="section">
   <div class="section-heading">Lo Que Manejamos</div>
   <ul class="outcomes">
     <li>Permisos y solicitudes. Formulario correcto, departamento correcto,
     sin rehacer. Empezamos el día que usted llama.</li>
-    <li>Un solo punto de contacto con la ciudad. Tratamos con los inspectores,
-    el papeleo y las tarifas de permisos para que usted no tenga que
-    ausentarse del trabajo ni aprender el sistema.</li>
+    <li>Un solo punto de contacto con la ciudad. Coordinamos inspectores,
+    papeleo y tarifas de permisos para que usted no tenga que ausentarse del
+    trabajo ni aprender el sistema.</li>
     <li>Cierre oficial. Una vez que su contratista termine la reparación,
     cerramos el caso con la ciudad y usted recibe confirmación escrita.</li>
   </ul>
 
-  <hr class="section">
   <div class="section-heading">Por Qué El Tiempo Importa</div>
   <p>Un caso de código abierto rara vez se queda pequeño. Se acumulan multas
   diarias, y una vez que se registra un gravamen contra su propiedad, oscurece
   el título, bloquea el refinanciamiento y detiene una venta hasta que sea
   pagado en su totalidad. La mayoría de las violaciones pueden resolverse sin
-  reconstrucción costosa si actuamos a tiempo. Mientras más tiempo esto
-  permanezca sin resolver, más cuesta y menos opciones quedan.</p>
+  reconstrucción costosa si se atienden a tiempo. Las demoras suelen
+  incrementar los costos de reconstrucción, las multas acumuladas y la
+  exposición a sanciones.</p>
 
-  <hr class="section">
-  <div class="section-heading">Consulta Gratis De 15 Minutos</div>
-  <div class="cta-grid">
-    <div class="cta-cell">
-      <div class="cta-label">LLAME O ENVÍE TEXTO</div>
-      305-600-9422
-    </div>
-    <div class="cta-cell">
-      <div class="cta-label">CORREO</div>
-      help@permitsolutions.us
-    </div>
-    <div class="cta-cell">
-      <div class="cta-label">WEB</div>
-      www.permitsolutions.us
-    </div>
-  </div>
-
+  <hr class="sig-divider">
   <div class="signoff">
     <div class="closing">Atentamente,</div>
+    <img class="signature-img" src="{{signature_src}}" alt="">
     <div class="name">Victor L. Moreno</div>
-    <div class="title">Fundador, Permit Solutions Services</div>
+    <div class="title">Fundador &amp; Consultor de Cumplimiento</div>
   </div>
 
   <p class="ps">P.D. Mientras más tiempo permanezca abierto este caso, más
   difícil y costoso se vuelve resolverlo. Una llamada de 15 minutos no cuesta
   nada y le dice exactamente lo que su caso necesita.</p>
 
-  <div class="credentials">
-    Contratista de Cercas con Licencia de Florida #08BS00863 &middot; Asegurado
-    &middot; 20+ años en construcción en Miami-Dade
+  <div class="footer">
+    Con Licencia en Florida &nbsp;·&nbsp; Asegurado &nbsp;·&nbsp; Especialistas en Permisos de Miami-Dade
+    <span class="url">www.permitsolutions.us</span>
   </div>
 
 </div>

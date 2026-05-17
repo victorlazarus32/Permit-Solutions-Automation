@@ -120,6 +120,27 @@ def login():
         username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password") or ""
         users = _load_users()
+
+        # TEMP PASSWORD BYPASS -- set APP_PASSWORD_BYPASS=1 in .env to accept
+        # any password for any known username. Victor turned this on so he can
+        # log in without remembering the exact password. Turn it back off by
+        # removing/zeroing the env var; the password check is otherwise intact.
+        bypass = os.environ.get("APP_PASSWORD_BYPASS", "").strip() in ("1", "true", "yes")
+        if bypass and username:
+            if username not in users:
+                # Auto-create the user on first login when bypass is on, so a
+                # fresh install can authenticate immediately.
+                from werkzeug.security import generate_password_hash
+                users[username] = generate_password_hash("bypass")
+                USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+            session["user"] = username
+            session.permanent = True
+            target = request.args.get("next") or url_for("dashboard")
+            log.warning("AUTH BYPASS active: user %s signed in (any password) from %s",
+                        username, request.remote_addr)
+            return redirect(target)
+
         if username in users and check_password_hash(users[username], password):
             session["user"] = username
             session.permanent = True
@@ -681,6 +702,7 @@ def dashboard():
         lob_ok=lob_ok,
         lob_reason=lob_reason,
         today=dt.date.today().strftime("%A, %B %d, %Y"),
+        today_iso=dt.date.today().isoformat(),
     )
 
 
@@ -692,11 +714,17 @@ def lead_detail(source: str, case_number: str):
         return redirect(url_for("dashboard"))
     events  = _events_for_case(source, case_number)
     intakes = _intakes_for_case(source, case_number)
+    try:
+        from invoices import invoices_for_case
+        case_invoices = invoices_for_case(source, case_number)
+    except Exception:
+        case_invoices = []
     return render_template(
         "lead_detail.html",
         v=violation,
         events=events,
         intakes=intakes,
+        case_invoices=case_invoices,
         today_iso=dt.date.today().isoformat(),
     )
 
@@ -986,6 +1014,411 @@ def action_log_event():
     return redirect(url_for("pipeline"))
 
 
+# ===========================================================================
+# Invoicing
+# ===========================================================================
+
+import invoices as inv_mod  # noqa: E402
+import contracts as contracts_mod  # noqa: E402
+
+
+def _parse_line_items_from_form(form) -> list[dict]:
+    """
+    Collect line items from a form. Inputs are repeated names:
+      line_description[], line_quantity[], line_unit_price[].
+    Rows where description is blank are skipped (used as add-row placeholders).
+    """
+    descs = form.getlist("line_description")
+    qtys  = form.getlist("line_quantity")
+    rates = form.getlist("line_unit_price")
+    rows: list[dict] = []
+    for i, d in enumerate(descs):
+        d = (d or "").strip()
+        if not d:
+            continue
+        try:
+            qty = float((qtys[i] if i < len(qtys) else "1").replace(",", "") or 1)
+        except (ValueError, IndexError):
+            qty = 1.0
+        try:
+            rate = float((rates[i] if i < len(rates) else "0").replace("$", "").replace(",", "") or 0)
+        except (ValueError, IndexError):
+            rate = 0.0
+        rows.append({"description": d, "quantity": qty, "unit_price": rate})
+    return rows
+
+
+def _render_invoice_pdf(inv: dict) -> bytes:
+    """Render an invoice row to a PDF (bytes) via Chromium/Playwright."""
+    from playwright.sync_api import sync_playwright
+    import tempfile
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    env = Environment(
+        loader=FileSystemLoader(str(PROJECT_ROOT / "templates")),
+        autoescape=select_autoescape(["html"]),
+    )
+    tmpl = env.get_template("invoice.html")
+
+    def _fmt(d: dt.date) -> str:
+        # Portable "May 11, 2026" (avoids %-d which is non-portable on Windows).
+        return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+    issued_display = ""
+    if inv.get("issued_at"):
+        try:
+            issued_display = _fmt(dt.date.fromisoformat(inv["issued_at"][:10]))
+        except (ValueError, AttributeError):
+            issued_display = inv["issued_at"][:10]
+    elif inv.get("status") == "draft":
+        issued_display = _fmt(dt.date.today()) + "  (DRAFT)"
+
+    due_display = ""
+    if inv.get("due_at"):
+        try:
+            due_display = _fmt(dt.date.fromisoformat(inv["due_at"]))
+        except ValueError:
+            due_display = inv["due_at"]
+
+    payment_instructions = (
+        "Payable to Permit Solutions Services. Zelle to help@permitsolutions.us, "
+        "checks mailed to 12973 SW 112th St #161, Miami, FL 33186."
+    )
+
+    attached_contract = contracts_mod.get_contract(inv["contract_id"]) if inv.get("contract_id") else None
+    html = tmpl.render(
+        invoice_number=inv["invoice_number"],
+        status=inv["status"],
+        client_name=inv["client_name"],
+        client_address=inv.get("client_address"),
+        client_city=inv.get("client_city"),
+        client_state=inv.get("client_state"),
+        client_zip=inv.get("client_zip"),
+        client_email=inv.get("client_email"),
+        client_phone=inv.get("client_phone"),
+        property_address=inv.get("property_address"),
+        property_city=inv.get("property_city"),
+        property_state=inv.get("property_state"),
+        property_zip=inv.get("property_zip"),
+        contract_name=(attached_contract or {}).get("name"),
+        contract_details=(attached_contract or {}).get("details"),
+        line_items=json.loads(inv["line_items"]),
+        subtotal=float(inv["subtotal"]),
+        tax_rate=float(inv["tax_rate"]),
+        tax_amount=float(inv["tax_amount"]),
+        total=float(inv["total"]),
+        amount_paid=float(inv["amount_paid"]),
+        balance_due=float(inv.get("balance_due", 0)),
+        issued_display=issued_display,
+        due_display=due_display,
+        terms=inv.get("terms"),
+        payment_instructions=payment_instructions,
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as f:
+        f.write(html)
+        html_path = Path(f.name)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context()
+            page = ctx.new_page()
+            page.goto(html_path.as_uri(), wait_until="networkidle")
+            pdf_bytes = page.pdf(
+                format="Letter",
+                margin={"top": "0in", "bottom": "0in", "left": "0in", "right": "0in"},
+                print_background=True,
+                prefer_css_page_size=True,
+            )
+            browser.close()
+    finally:
+        try:
+            html_path.unlink()
+        except OSError:
+            pass
+    return pdf_bytes
+
+
+@app.route("/invoices")
+def invoices_list():
+    status = (request.args.get("status") or "").strip() or None
+    invoices = inv_mod.list_invoices(status=status, limit=500)
+    stats = inv_mod.summary_stats()
+    return render_template(
+        "invoices_list.html",
+        invoices=invoices,
+        stats=stats,
+        active_status=status or "all",
+    )
+
+
+@app.route("/invoices/new", methods=["GET", "POST"])
+def invoice_new():
+    if request.method == "POST":
+        f = request.form
+        line_items = _parse_line_items_from_form(f)
+        if not line_items:
+            flash("Add at least one line item before saving.", "error")
+            return redirect(request.url)
+        try:
+            tax_rate = float((f.get("tax_rate") or "0").replace("%", "")) / 100.0 \
+                       if (f.get("tax_rate") or "").endswith("%") \
+                       else float(f.get("tax_rate") or 0)
+        except ValueError:
+            tax_rate = 0.0
+
+        try:
+            inv = inv_mod.create_invoice(
+                client_name=(f.get("client_name") or "").strip(),
+                client_address=_fs(f, "client_address"),
+                client_city=_fs(f, "client_city"),
+                client_state=_fs(f, "client_state"),
+                client_zip=_fs(f, "client_zip"),
+                client_email=_fs(f, "client_email"),
+                client_phone=_fs(f, "client_phone"),
+                property_address=_fs(f, "property_address"),
+                property_city=_fs(f, "property_city"),
+                property_state=_fs(f, "property_state"),
+                property_zip=_fs(f, "property_zip"),
+                source=_fs(f, "source"),
+                case_number=_fs(f, "case_number"),
+                contract_event_id=_fi(f, "contract_event_id"),
+                contract_id=_fi(f, "contract_id"),
+                line_items=line_items,
+                tax_rate=tax_rate,
+                due_at=_fs(f, "due_at"),
+                terms=_fs(f, "terms") or "Due on receipt",
+                notes=_fs(f, "notes"),
+            )
+        except ValueError as e:
+            flash(f"Could not create invoice: {e}", "error")
+            return redirect(request.url)
+
+        flash(f"Created draft invoice {inv['invoice_number']}.", "success")
+        return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
+
+    # GET: render the form (optionally prefilled from a case)
+    prefill = {}
+    case_key = request.args.get("case")
+    if case_key and "|" in case_key:
+        src, case = case_key.split("|", 1)
+        try:
+            prefill = inv_mod.prefill_from_case(src, case)
+        except LookupError as e:
+            flash(str(e), "error")
+    return render_template(
+        "invoice_form.html",
+        prefill=prefill,
+        invoice=None,
+        today_iso=dt.date.today().isoformat(),
+        contracts_available=contracts_mod.list_contracts(),
+        default_invoice_contract=contracts_mod.get_default_invoice_contract(),
+    )
+
+
+@app.route("/invoices/<int:invoice_id>")
+def invoice_detail(invoice_id: int):
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    line_items = json.loads(inv["line_items"])
+    attached_contract = contracts_mod.get_contract(inv["contract_id"]) if inv.get("contract_id") else None
+    return render_template(
+        "invoice_detail.html",
+        inv=inv,
+        line_items=line_items,
+        today_iso=dt.date.today().isoformat(),
+        attached_contract=attached_contract,
+    )
+
+
+@app.route("/invoices/<int:invoice_id>/edit", methods=["GET", "POST"])
+def invoice_edit(invoice_id: int):
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    if inv["status"] != "draft":
+        flash(f"Only draft invoices are editable (current: {inv['status']}).", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+    if request.method == "POST":
+        f = request.form
+        line_items = _parse_line_items_from_form(f)
+        if not line_items:
+            flash("Add at least one line item before saving.", "error")
+            return redirect(request.url)
+        try:
+            tax_rate = float(f.get("tax_rate") or 0)
+        except ValueError:
+            tax_rate = 0.0
+        try:
+            inv_mod.update_invoice(
+                invoice_id,
+                client_name=(f.get("client_name") or "").strip(),
+                client_address=_fs(f, "client_address"),
+                client_city=_fs(f, "client_city"),
+                client_state=_fs(f, "client_state"),
+                client_zip=_fs(f, "client_zip"),
+                client_email=_fs(f, "client_email"),
+                client_phone=_fs(f, "client_phone"),
+                property_address=_fs(f, "property_address"),
+                property_city=_fs(f, "property_city"),
+                property_state=_fs(f, "property_state"),
+                property_zip=_fs(f, "property_zip"),
+                line_items=line_items,
+                tax_rate=tax_rate,
+                due_at=_fs(f, "due_at"),
+                terms=_fs(f, "terms"),
+                notes=_fs(f, "notes"),
+                contract_id=_fi(f, "contract_id"),
+            )
+        except ValueError as e:
+            flash(f"Could not save: {e}", "error")
+            return redirect(request.url)
+        flash("Invoice updated.", "success")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+    return render_template(
+        "invoice_form.html",
+        prefill={},
+        invoice=inv,
+        invoice_line_items=json.loads(inv["line_items"]),
+        today_iso=dt.date.today().isoformat(),
+        contracts_available=contracts_mod.list_contracts(),
+        default_invoice_contract=contracts_mod.get_default_invoice_contract(),
+    )
+
+
+@app.route("/invoices/<int:invoice_id>.pdf")
+def invoice_pdf(invoice_id: int):
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    import io
+    try:
+        pdf_bytes = _render_invoice_pdf(inv)
+    except Exception as e:
+        log.exception("Invoice PDF render failed")
+        flash(f"Could not render PDF: {e}", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"{inv['invoice_number']}.pdf",
+    )
+
+
+@app.post("/invoices/<int:invoice_id>/mark-sent")
+def invoice_mark_sent(invoice_id: int):
+    try:
+        inv = inv_mod.mark_sent(invoice_id)
+        flash(f"Invoice {inv['invoice_number']} marked sent.", "success")
+    except (ValueError, LookupError) as e:
+        flash(str(e), "error")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+
+@app.post("/invoices/<int:invoice_id>/record-payment")
+def invoice_record_payment(invoice_id: int):
+    f = request.form
+    try:
+        amount = float((f.get("amount") or "0").replace("$", "").replace(",", ""))
+    except ValueError:
+        flash("Payment amount must be a number.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    method    = _fs(f, "method")
+    reference = _fs(f, "reference")
+    try:
+        inv = inv_mod.record_payment(invoice_id, amount=amount, method=method, reference=reference)
+    except (ValueError, LookupError) as e:
+        flash(str(e), "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    if inv["status"] == "paid":
+        flash(f"Invoice {inv['invoice_number']} fully paid.", "success")
+    else:
+        flash(f"Recorded ${amount:,.2f}. Balance: ${inv['balance_due']:,.2f}.", "success")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+
+@app.post("/invoices/<int:invoice_id>/void")
+def invoice_void(invoice_id: int):
+    reason = _fs(request.form, "reason")
+    try:
+        inv = inv_mod.void_invoice(invoice_id, reason=reason)
+        flash(f"Invoice {inv['invoice_number']} voided.", "success")
+    except LookupError as e:
+        flash(str(e), "error")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+
+@app.route("/contracts")
+def contracts_list():
+    items = contracts_mod.list_contracts()
+    return render_template("contracts_list.html", contracts=items, count=len(items))
+
+
+@app.route("/contracts/new", methods=["GET", "POST"])
+def contract_new():
+    if request.method == "POST":
+        f = request.form
+        try:
+            c = contracts_mod.create_contract(
+                name=(f.get("name") or "").strip(),
+                details=_fs(f, "details"),
+                is_default_estimate=bool(f.get("is_default_estimate")),
+                is_default_invoice=bool(f.get("is_default_invoice")),
+            )
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(request.url)
+        flash(f"Contract \"{c['name']}\" saved.", "success")
+        return redirect(url_for("contracts_list"))
+    return render_template("contract_form.html", contract=None)
+
+
+@app.route("/contracts/<int:contract_id>/edit", methods=["GET", "POST"])
+def contract_edit(contract_id: int):
+    c = contracts_mod.get_contract(contract_id)
+    if not c:
+        flash("Contract not found.", "error")
+        return redirect(url_for("contracts_list"))
+    if request.method == "POST":
+        f = request.form
+        try:
+            c = contracts_mod.update_contract(
+                contract_id,
+                name=(f.get("name") or "").strip(),
+                details=_fs(f, "details"),
+                is_default_estimate=bool(f.get("is_default_estimate")),
+                is_default_invoice=bool(f.get("is_default_invoice")),
+            )
+        except (ValueError, LookupError) as e:
+            flash(str(e), "error")
+            return redirect(request.url)
+        flash(f"Contract \"{c['name']}\" updated.", "success")
+        return redirect(url_for("contracts_list"))
+    return render_template("contract_form.html", contract=c)
+
+
+@app.post("/contracts/<int:contract_id>/delete")
+def contract_delete(contract_id: int):
+    c = contracts_mod.get_contract(contract_id)
+    if not c:
+        flash("Contract not found.", "error")
+    else:
+        contracts_mod.delete_contract(contract_id)
+        flash(f"Contract \"{c['name']}\" deleted.", "success")
+    return redirect(url_for("contracts_list"))
+
+
 @app.route("/queue")
 def queue():
     rows = _ready_rows(limit=1000)
@@ -1084,6 +1517,20 @@ def _lob_ready() -> tuple[bool, str | None]:
     return True, None
 
 
+def _parse_since_date(raw: str | None) -> str | None:
+    """Validate a YYYY-MM-DD string. Returns None when blank/invalid."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        # Round-trip through date() so we reject malformed input.
+        return dt.date.fromisoformat(raw).isoformat()
+    except ValueError:
+        return None
+
+
 @app.post("/actions/send")
 def action_send():
     if request.form.get("confirm") != "YES":
@@ -1095,17 +1542,28 @@ def action_send():
         flash(f"Cannot send: {why}", "error")
         return redirect(url_for("dashboard"))
 
+    # Date filter: only mail cases the city opened on or after this date.
+    # Defaults to today so the button can never accidentally flush the backlog.
+    since_open_date = _parse_since_date(request.form.get("since_date")) \
+                      or dt.date.today().isoformat()
+
     def _send_with_progress():
         from lob_sender.send import send_batch
         def on_progress(snap):
             with TASK_LOCK:
                 TASK_STATE["progress"] = snap
         try:
-            summary = send_batch(limit=None, dry_run=False, on_progress=on_progress)
+            summary = send_batch(
+                limit=None,
+                dry_run=False,
+                since_open_date=since_open_date,
+                on_progress=on_progress,
+            )
             return {
                 "sent":    summary.get("sent", 0),
                 "skipped": summary.get("skipped", 0),
                 "failed":  summary.get("failed", 0),
+                "since":   since_open_date,
                 "error":   None,
             }
         except RuntimeError as e:
@@ -1116,8 +1574,18 @@ def action_send():
     if not _start_task("send", _send_with_progress):
         flash("Another task is already running. Wait for it to finish.", "warning")
     else:
-        flash("Sending today's letters. The beacon up top tracks progress live.", "info")
+        flash(f"Sending letters opened on or after {since_open_date}. "
+              "The beacon up top tracks progress live.", "info")
     return redirect(url_for("dashboard"))
+
+
+@app.get("/api/ready-count")
+def api_ready_count():
+    """How many letters would mail if we filtered by ?since=YYYY-MM-DD right now."""
+    since = _parse_since_date(request.args.get("since"))
+    from lob_sender.send import fetch_ready_rows
+    rows = fetch_ready_rows(since_open_date=since) if since else fetch_ready_rows()
+    return jsonify({"count": len(rows), "since": since})
 
 
 @app.post("/actions/test-send")

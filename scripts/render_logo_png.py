@@ -21,10 +21,12 @@ SVG_PATH        = PROJECT_ROOT / "assets" / "permit_solutions_logo.svg"
 PNG_PATH        = PROJECT_ROOT / "assets" / "permit_solutions_logo.png"
 APP_PNG_PATH    = PROJECT_ROOT / "app" / "static" / "permit_solutions_logo.png"
 
-# 1500x1500 keeps the logo crisp at the largest size we use it (0.95in tall in
-# the letter, which is ~285px at 300 DPI). 1500 gives 5x margin so it scales
-# down without aliasing.
-RENDER_PX = 1500
+# 600x600 keeps the logo crisp at the largest size we use it (1.5in tall in
+# the letter, which is ~450px at 300 DPI). We deliberately stay small because
+# this PNG is embedded as a base64 data URI in every Lob API call, and Lob
+# caps total stringified payload at 25,000 chars. 600x600 yields ~12KB PNG
+# (~16KB base64), leaving plenty of headroom for the template HTML.
+RENDER_PX = 600
 
 
 def main() -> int:

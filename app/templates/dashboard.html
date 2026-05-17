@@ -169,11 +169,17 @@
       The button below is locked until that is fixed.
     </p>
     {% else %}
-    <p>Sends every ready-to-mail letter through Lob. Type <code>YES</code> in capitals to authorize. The system never double-mails any case.</p>
+    <p>Mails ready-to-mail letters whose case was opened on or after the date below. Already-mailed cases are auto-excluded. Type <code>YES</code> in capitals to authorize.</p>
     {% endif %}
+
+    <label class="send-date-label" for="since_date">Send cases opened since</label>
+    <input type="date" name="since_date" id="since_date"
+           value="{{ today_iso }}" max="{{ today_iso }}"
+           {% if not lob_ok %}disabled{% endif %}>
+
     <input type="text" name="confirm" placeholder="Type YES to authorize" autocomplete="off" {% if lob_ok %}required{% else %}disabled{% endif %}>
     <button type="submit" {% if task.running or not lob_ok %}disabled{% endif %} class="btn-danger" id="send-btn">
-      <span class="send-btn-default">{% if not lob_ok %}Locked: configure Lob first{% else %}Mail {{ totals.ready }} Letter{% if totals.ready != 1 %}s{% endif %}{% endif %}</span>
+      <span class="send-btn-default">{% if not lob_ok %}Locked: configure Lob first{% else %}Mail <span id="send-count">{{ totals.ready }}</span> Letter<span id="send-count-plural">s</span>{% endif %}</span>
       <span class="send-btn-active" hidden>
         <span class="btn-beacon"><span class="ring r1"></span><span class="ring r2"></span><span class="core"></span></span>
         TRANSMITTING…
@@ -187,12 +193,33 @@
 
 {% block scripts %}
 
-{# ===== Send button: instant beacon transformation on submit ===== #}
+{# ===== Send button: live count when the date changes + beacon on submit ===== #}
 <script>
 (function() {
   var form = document.getElementById('send-form');
   var btn  = document.getElementById('send-btn');
   if (!form || !btn) return;
+
+  /* Live recount when the user changes the date */
+  var dateInput   = document.getElementById('since_date');
+  var countSpan   = document.getElementById('send-count');
+  var pluralSpan  = document.getElementById('send-count-plural');
+  if (dateInput && countSpan) {
+    var fetchCount = function() {
+      var d = dateInput.value;
+      if (!d) return;
+      fetch('/api/ready-count?since=' + encodeURIComponent(d))
+        .then(function(r) { return r.json(); })
+        .then(function(j) {
+          countSpan.textContent = j.count;
+          if (pluralSpan) pluralSpan.textContent = (j.count === 1) ? '' : 's';
+        })
+        .catch(function() { /* leave count as-is on error */ });
+    };
+    dateInput.addEventListener('change', fetchCount);
+    fetchCount();
+  }
+
   form.addEventListener('submit', function(e) {
     var confirmInput = form.querySelector('input[name="confirm"]');
     if (confirmInput && confirmInput.value !== 'YES') return;  // browser shows required validation

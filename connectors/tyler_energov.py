@@ -73,7 +73,7 @@ def _load_template() -> dict:
 # Be polite. Tyler rate-limits aggressive callers around 50 reqs/sec.
 PAGE_SLEEP_SEC = 0.6
 REQUEST_TIMEOUT = 30
-MAX_PAGES_PER_RUN = 200  # 200 pages * 10 rows = 2000 rows; safety cap
+MAX_PAGES_PER_RUN = 600  # Tyler's full catalog is ~290 pages today; 600 is headroom
 DEFAULT_FIRST_RUN_PAGES = 30  # cold-start: pull the most recent ~300 cases
 
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -187,6 +187,34 @@ def _save_watermark(source: str, max_case_number: str) -> None:
     p.write_text(max_case_number, encoding="ascii")
 
 
+# Page-number watermark: the page where the case-number watermark sat on the
+# previous run. Tyler returns cases ascending and stable, so we can resume near
+# this page instead of restarting at page 1. The case-number filter is still
+# the source of truth — this is just a starting-point hint.
+RESUME_PAGE_BUFFER = 5  # pages back from saved page, to absorb minor catalog shifts
+
+
+def _watermark_page_path(source: str) -> Path:
+    return WATERMARK_DIR / f"{source}_tyler_watermark_page.txt"
+
+
+def _read_watermark_page(source: str) -> int | None:
+    p = _watermark_page_path(source)
+    if not p.exists():
+        return None
+    try:
+        n = int(p.read_text(encoding="ascii").strip())
+    except (ValueError, OSError):
+        return None
+    return max(1, n)
+
+
+def _save_watermark_page(source: str, page_number: int) -> None:
+    p = _watermark_page_path(source)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(str(max(1, page_number)), encoding="ascii")
+
+
 def _normalize_address(addr_obj) -> str | None:
     """Tyler's Address is a sub-object; AddressDisplay is the human-readable string."""
     if isinstance(addr_obj, str) and addr_obj.strip():
@@ -233,14 +261,20 @@ def _row_to_record(*, t: TylerTenant, raw: dict) -> dict | None:
 
 def fetch_pages(t: TylerTenant, *, max_pages: int,
                 since_case_number: str | None = None,
-                log: logging.Logger) -> list[dict]:
+                start_page: int = 1,
+                log: logging.Logger) -> tuple[list[dict], int]:
     """
     Paginate the search endpoint and return rows whose CaseNumber is strictly
-    greater than `since_case_number`.
+    greater than `since_case_number`, plus the page number where the watermark
+    was crossed (0 if it was never crossed).
 
     Tyler returns cases sorted ASCENDING by CaseNumber regardless of what we
     request, so on incremental runs we skip the early pages (already-ingested
     cases <= watermark) and start collecting once we cross the watermark.
+
+    `start_page` lets the caller resume near the previous run's crossing page,
+    avoiding hundreds of redundant skip-pages each run. Safe to over- or
+    under-shoot: the case-number filter still gates what gets collected.
 
     Stops when:
       - empty page returned (catalog exhausted), or
@@ -249,9 +283,10 @@ def fetch_pages(t: TylerTenant, *, max_pages: int,
     seen: set[str] = set()
     out: list[dict] = []
     crossed_watermark = since_case_number is None  # cold start collects everything
+    crossed_at_page = 0
     pages_above_watermark = 0
     with requests.Session() as session:
-        for page in range(1, max_pages + 1):
+        for page in range(start_page, max_pages + 1):
             try:
                 rows = _post_page(session, t, page_number=page, log=log)
             except RuntimeError as e:
@@ -277,6 +312,7 @@ def fetch_pages(t: TylerTenant, *, max_pages: int,
 
             if not crossed_watermark and new_in_page > 0:
                 crossed_watermark = True
+                crossed_at_page = page
                 log.info("page %d: crossed watermark %s; new rows start here",
                          page, since_case_number)
 
@@ -285,10 +321,17 @@ def fetch_pages(t: TylerTenant, *, max_pages: int,
                 if page == 1 or pages_above_watermark % 10 == 0:
                     log.info("page %d: %d new rows (running total %d)",
                              page, new_in_page, len(out))
+            else:
+                # Pre-watermark skipping phase — log every 25 pages so a
+                # mis-sized MAX_PAGES_PER_RUN cap doesn't fail silently.
+                if page % 25 == 0:
+                    last_cn = rows[-1].get("CaseNumber") if rows else "?"
+                    log.info("page %d: still skipping (last seen %s, watermark %s)",
+                             page, last_cn, since_case_number)
 
             time.sleep(PAGE_SLEEP_SEC)
 
-    return out
+    return out, crossed_at_page
 
 
 def run(source: str, *, max_pages: int | None = None,
@@ -317,11 +360,20 @@ def run(source: str, *, max_pages: int | None = None,
         max_pages = (MAX_PAGES_PER_RUN if since_case_number
                      else DEFAULT_FIRST_RUN_PAGES)
 
-    log.info("=== %s Tyler run: max_pages=%d since=%s ===",
-             t.pretty_name, max_pages, since_case_number or "(cold start)")
+    # Resume near the previous run's crossing page to skip the long ascending
+    # walk through pre-watermark cases. Falls back to page 1 on cold start or
+    # if the saved page hint is missing.
+    saved_page = _read_watermark_page(t.source) if since_case_number else None
+    start_page = max(1, saved_page - RESUME_PAGE_BUFFER) if saved_page else 1
 
-    raw_rows = fetch_pages(t, max_pages=max_pages,
-                           since_case_number=since_case_number, log=log)
+    log.info("=== %s Tyler run: max_pages=%d since=%s start_page=%d ===",
+             t.pretty_name, max_pages, since_case_number or "(cold start)",
+             start_page)
+
+    raw_rows, crossed_at_page = fetch_pages(
+        t, max_pages=max_pages, since_case_number=since_case_number,
+        start_page=start_page, log=log,
+    )
     log.info("fetched %d raw NOV rows", len(raw_rows))
 
     records = []
@@ -355,6 +407,11 @@ def run(source: str, *, max_pages: int | None = None,
         if not prior or new_high > prior:
             _save_watermark(t.source, new_high)
             log.info("watermark advanced %s -> %s", prior, new_high)
+
+    # Save the page hint so the next run can skip directly to it.
+    if crossed_at_page > 0:
+        _save_watermark_page(t.source, crossed_at_page)
+        log.info("page hint saved: next run starts near page %d", crossed_at_page)
 
     return {
         "source":          t.source,
