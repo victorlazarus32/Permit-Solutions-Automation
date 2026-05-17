@@ -13,13 +13,16 @@ Examples:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 from werkzeug.security import generate_password_hash
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-USERS_FILE = PROJECT_ROOT / "data" / "users.json"
+# Honor USERS_FILE env var so this script writes to the same file the server
+# reads on Render (where users live on the persistent disk).
+USERS_FILE = Path(os.environ.get("USERS_FILE") or (PROJECT_ROOT / "data" / "users.json"))
 
 
 def load() -> dict:

@@ -56,7 +56,10 @@ from scripts.morning_run import (run_miami_dade, run_homestead,
 LOG_FILE = PROJECT_ROOT / "data" / "morning_run.log"
 APP_LOG_FILE = PROJECT_ROOT / "data" / "operator_console.log"
 WATERMARK_FILE = PROJECT_ROOT / "data" / "miami_dade_unincorporated_last_run.txt"
-USERS_FILE = PROJECT_ROOT / "data" / "users.json"
+# USERS_FILE: on Render (or any host with a persistent disk), set USERS_FILE
+# env var to point at the disk mount so accounts survive deploys. Locally it
+# defaults to data/users.json.
+USERS_FILE = Path(os.environ.get("USERS_FILE") or (PROJECT_ROOT / "data" / "users.json"))
 SECRET_FILE = PROJECT_ROOT / "data" / ".app_secret"
 
 def _load_or_create_secret() -> str:
