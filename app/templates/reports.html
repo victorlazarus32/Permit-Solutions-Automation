@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Mailing Reports{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <h1>Mailing Reports</h1>
+      <p class="hero-sub">
+        Letters sent in the selected window, broken down by city and violation type.
+      </p>
+    </div>
+  </div>
+</section>
+
+<form method="GET" class="lead-card" style="max-width: 720px;">
+  <div class="form-row">
+    <div class="form-field">
+      <label for="since">From</label>
+      <input type="date" name="since" id="since" value="{{ since }}">
+    </div>
+    <div class="form-field">
+      <label for="until">To (inclusive)</label>
+      <input type="date" name="until" id="until" value="{{ until }}">
+    </div>
+    <div class="form-field" style="max-width: 140px; align-self: flex-end;">
+      <button type="submit" class="btn-primary">Apply</button>
+    </div>
+  </div>
+  <div class="form-row single" style="margin-top: 4px;">
+    <div class="form-field">
+      <label>Quick ranges</label>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <a class="btn-secondary btn-tiny" href="?range=today">Today</a>
+        <a class="btn-secondary btn-tiny" href="?range=7">Last 7 days</a>
+        <a class="btn-secondary btn-tiny" href="?range=30">Last 30 days</a>
+        <a class="btn-secondary btn-tiny" href="?range=90">Last 90 days</a>
+        <a class="btn-secondary btn-tiny" href="?range=all">All time</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="lead-card" style="margin-top: 1.25rem;">
+  <h3 class="lead-card-title">
+    Total letters mailed: <span style="color: var(--orange); font-weight: 700;">{{ grand_total }}</span>
+  </h3>
+
+  {% if grand_total == 0 %}
+    <p class="empty-state">No letters mailed in this window.</p>
+  {% else %}
+    <table class="data-table" style="margin-top: 0.5rem;">
+      <thead>
+        <tr>
+          <th>Violation type</th>
+          {% for s in cross.sources %}
+            <th class="num">{{ s.replace('_', ' ') }}</th>
+          {% endfor %}
+          <th class="num"><strong>Total</strong></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for kw in cross.keywords %}
+          <tr>
+            <td><span class="kw-chip">{{ kw }}</span></td>
+            {% for s in cross.sources %}
+              <td class="num">{{ cross.matrix[kw].get(s, 0) or '—' }}</td>
+            {% endfor %}
+            <td class="num"><strong>{{ cross.row_totals[kw] }}</strong></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td><strong>TOTAL</strong></td>
+          {% for s in cross.sources %}
+            <td class="num"><strong>{{ cross.col_totals[s] }}</strong></td>
+          {% endfor %}
+          <td class="num"><strong>{{ grand_total }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  {% endif %}
+</div>
+
+{% if per_day %}
+<div class="lead-card" style="margin-top: 1.25rem;">
+  <h3 class="lead-card-title">By day</h3>
+  <table class="data-table">
+    <thead><tr><th>Day</th><th class="num">Letters</th></tr></thead>
+    <tbody>
+      {% for d in per_day %}
+        <tr><td>{{ d.day }}</td><td class="num">{{ d.count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if recent %}
+<div class="lead-card" style="margin-top: 1.25rem;">
+  <h3 class="lead-card-title">Most recent letters (up to {{ recent_limit }})</h3>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Sent at</th>
+        <th>Source</th>
+        <th>Case #</th>
+        <th>Owner</th>
+        <th>Property</th>
+        <th>Keywords</th>
+        <th>Lob ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in recent %}
+        <tr>
+          <td>{{ (r.sent_at or '')[:16].replace('T', ' ') }}</td>
+          <td>{{ r.source.replace('_', ' ') }}</td>
+          <td class="mono">{{ r.case_number }}</td>
+          <td>{{ (r.owner_full_name or '')[:30] }}</td>
+          <td>{{ (r.property_address or '')[:32] }}</td>
+          <td>
+            {% if r.matched_keywords %}
+              {% for kw in r.matched_keywords.split(',') %}<span class="kw-chip">{{ kw }}</span>{% endfor %}
+            {% endif %}
+          </td>
+          <td class="mono" style="font-size: 0.8rem;">{{ (r.lob_letter_id or '')[:14] }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

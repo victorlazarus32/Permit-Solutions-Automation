@@ -1023,6 +1023,7 @@ def action_log_event():
 
 import invoices as inv_mod  # noqa: E402
 import contracts as contracts_mod  # noqa: E402
+import reports as reports_mod  # noqa: E402
 
 
 def _parse_line_items_from_form(form) -> list[dict]:
@@ -1420,6 +1421,46 @@ def contract_delete(contract_id: int):
         contracts_mod.delete_contract(contract_id)
         flash(f"Contract \"{c['name']}\" deleted.", "success")
     return redirect(url_for("contracts_list"))
+
+
+@app.route("/reports")
+def reports():
+    # Quick-range presets via ?range=today|7|30|90|all
+    today_iso = dt.date.today().isoformat()
+    quick = (request.args.get("range") or "").strip().lower()
+    if quick == "today":
+        since, until = today_iso, today_iso
+    elif quick in ("7", "30", "90"):
+        days = int(quick)
+        since, until = (dt.date.today() - dt.timedelta(days=days - 1)).isoformat(), today_iso
+    elif quick == "all":
+        since, until = "", ""
+    else:
+        # Explicit since/until from query string, else default to last 30 days.
+        since = request.args.get("since")
+        until = request.args.get("until")
+        if since is None and until is None:
+            since, until = reports_mod.default_window(30)
+
+    since_arg = since or None
+    until_arg = until or None
+
+    cross = reports_mod.by_source_and_keyword(since=since_arg, until=until_arg)
+    per_day = reports_mod.per_day(since=since_arg, until=until_arg)
+    recent_limit = 50
+    recent = reports_mod.recent_letters(since=since_arg, until=until_arg,
+                                        limit=recent_limit)
+
+    return render_template(
+        "reports.html",
+        since=since or "",
+        until=until or "",
+        grand_total=cross["grand_total"],
+        cross=cross,
+        per_day=per_day,
+        recent=recent,
+        recent_limit=recent_limit,
+    )
 
 
 @app.route("/queue")
