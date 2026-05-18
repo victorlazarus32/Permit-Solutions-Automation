@@ -1,0 +1,5 @@
+# Force LF line endings for shell scripts and other Linux-targeted files.
+# Render runs these on Linux; CRLF breaks the bash shebang silently.
+*.sh    text eol=lf
+*.bash  text eol=lf
+Procfile text eol=lf
