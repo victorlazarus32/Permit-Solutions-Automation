@@ -34,6 +34,8 @@ USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
               "AppleWebKit/537.36 (KHTML, like Gecko) "
               "Chrome/126.0 Safari/537.36")
 REQUEST_TIMEOUT = 20
+MAX_RETRIES = 3                # total attempts on transient errors
+RETRY_BACKOFF_BASE_SEC = 2.0   # 2s, 4s, 8s between attempts
 
 # Polite spacing between calls when batch-enriching. The PA service is robust
 # but there's no reason to be inconsiderate.
@@ -119,17 +121,35 @@ def lookup(folio: str, *, session: requests.Session | None = None) -> OwnerInfo:
                          site_address="", raw={})
 
     s = session or requests
-    r = s.get(
-        ENDPOINT,
-        params={"Operation": OPERATION, "folioNumber": f,
-                "clientAppName": CLIENT_APP},
-        headers={"accept": "application/json",
-                 "user-agent": USER_AGENT,
-                 "referer": "https://www.miamidade.gov/Apps/PA/PropertySearch/"},
-        timeout=REQUEST_TIMEOUT,
-    )
-    r.raise_for_status()
-    data = r.json()
+    params = {"Operation": OPERATION, "folioNumber": f, "clientAppName": CLIENT_APP}
+    headers = {"accept": "application/json", "user-agent": USER_AGENT,
+               "referer": "https://www.miamidade.gov/Apps/PA/PropertySearch/"}
+
+    # Retry on transient failures: connection resets, timeouts, and 5xx errors.
+    # Miami-Dade PA flakes intermittently (especially from non-FL IPs like cloud
+    # hosts). A few backoff retries turn most "PA down" runs into successes.
+    last_err: Exception | None = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            r = s.get(ENDPOINT, params=params, headers=headers,
+                      timeout=REQUEST_TIMEOUT)
+            # Retry on 5xx; let 4xx propagate immediately (client errors).
+            if 500 <= r.status_code < 600:
+                raise requests.HTTPError(f"{r.status_code} Server Error", response=r)
+            r.raise_for_status()
+            data = r.json()
+            break
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+            last_err = e
+            if attempt == MAX_RETRIES:
+                raise
+            sleep_for = RETRY_BACKOFF_BASE_SEC * (2 ** (attempt - 1))
+            log.warning("PA lookup attempt %d/%d for folio %s failed (%s); "
+                        "retrying in %.1fs",
+                        attempt, MAX_RETRIES, f, e, sleep_for)
+            time.sleep(sleep_for)
+    else:
+        raise RuntimeError(f"PA lookup exhausted retries: {last_err}")
 
     name = _join_owner_names(data.get("OwnerInfos") or [])
     mail = _build_mailing_string(data.get("MailingAddress"))
