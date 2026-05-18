@@ -25,12 +25,86 @@ look and feel matches the violation letter (Inter, orange accent, etc).
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Any
 
 from db import connect
+
+
+# Multi-word South Florida city names we want to recognize when splitting a
+# one-line address. Order longest-first so "MIAMI BEACH" matches before "MIAMI".
+_MULTI_WORD_CITIES = sorted([
+    "NORTH MIAMI BEACH", "MIAMI GARDENS", "MIAMI SHORES", "MIAMI SPRINGS",
+    "PALMETTO BAY", "CUTLER BAY", "BAY HARBOR ISLANDS", "BAL HARBOUR",
+    "CORAL GABLES", "CORAL SPRINGS", "SUNNY ISLES", "SUNNY ISLES BEACH",
+    "PEMBROKE PINES", "FORT LAUDERDALE", "DEERFIELD BEACH", "POMPANO BEACH",
+    "KEY BISCAYNE", "FISHER ISLAND", "VIRGINIA GARDENS", "WEST MIAMI",
+    "SOUTH MIAMI", "NORTH MIAMI", "MIAMI BEACH", "SURFSIDE",
+], key=lambda c: -len(c))
+
+
+def _parse_address(raw: str | None) -> dict:
+    """
+    Split a one-line US address into {street, city, state, zip}.
+
+    Handles both space-separated (Tyler) and comma-separated (PA) formats.
+    Returns empty strings for any field we can't parse — never raises.
+
+    Examples:
+      "2006 SE 13TH ST HOMESTEAD FL 33035"
+        -> street='2006 SE 13TH ST', city='HOMESTEAD', state='FL', zip='33035'
+      "11769 SW 222ND ST , MIAMI FL 33170-1234"
+        -> street='11769 SW 222ND ST', city='MIAMI', state='FL', zip='33170'
+    """
+    out = {"street": "", "city": "", "state": "", "zip": ""}
+    if not raw or not raw.strip():
+        return out
+
+    s = re.sub(r"\s+", " ", raw.strip()).rstrip(",")
+
+    # 1) Pull ZIP off the end (5 digits, optional -4)
+    m_zip = re.search(r"\b(\d{5})(?:-\d{4})?\s*$", s)
+    if not m_zip:
+        # No zip found — treat entire string as street, give up on parts.
+        out["street"] = s
+        return out
+    out["zip"] = m_zip.group(1)
+    s = s[:m_zip.start()].rstrip(", ")
+
+    # 2) Pull STATE (2 letters) off the new end
+    m_st = re.search(r"[,\s]([A-Z]{2})\s*$", s.upper())
+    if m_st:
+        out["state"] = m_st.group(1)
+        s = s[:m_st.start()].rstrip(", ")
+
+    # 3) Split remaining into street + city
+    s_upper = s.upper()
+    matched_city = None
+    for city in _MULTI_WORD_CITIES:
+        # Match city as the trailing token(s), optionally preceded by a comma
+        pat = re.compile(rf"[,\s]{re.escape(city)}\s*$")
+        m = pat.search(s_upper)
+        if m:
+            matched_city = city
+            s = s[:m.start()].rstrip(", ")
+            break
+
+    if matched_city:
+        out["city"] = matched_city
+        out["street"] = s
+    else:
+        # Fallback: assume city is the LAST word
+        parts = s.rsplit(maxsplit=1)
+        if len(parts) == 2:
+            out["street"] = parts[0].rstrip(", ")
+            out["city"] = parts[1].upper()
+        else:
+            out["street"] = s
+
+    return out
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -463,15 +537,27 @@ def prefill_from_case(source: str, case_number: str) -> dict:
     client_email = (ev["contact_email"] if ev and ev["contact_email"] else None) \
                    or (intake["caller_email"] if intake and intake["caller_email"] else None)
 
+    # Parse both addresses into pieces so the invoice form's City/State/Zip
+    # fields populate automatically instead of cramming everything into the
+    # single street field.
+    mail_parts = _parse_address(v["owner_mailing_address"])
+    prop_parts = _parse_address(v["property_address"])
+
     return {
         "source":             source,
         "case_number":        case_number,
         "contract_event_id":  ev["id"] if ev else None,
         "client_name":        client_name,
-        "client_address":     v["owner_mailing_address"],
+        "client_address":     mail_parts["street"] or v["owner_mailing_address"],
+        "client_city":        mail_parts["city"],
+        "client_state":       mail_parts["state"],
+        "client_zip":         mail_parts["zip"],
         "client_phone":       client_phone,
         "client_email":       client_email,
-        "property_address":   v["property_address"],
+        "property_address":   prop_parts["street"] or v["property_address"],
+        "property_city":      prop_parts["city"],
+        "property_state":     prop_parts["state"],
+        "property_zip":       prop_parts["zip"],
         "suggested_amount":   contract_value,
         "suggested_description": (
             f"Permit Solutions Services — case {case_number} "
