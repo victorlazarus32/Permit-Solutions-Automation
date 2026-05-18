@@ -93,7 +93,9 @@ app.secret_key = _load_or_create_secret()
 
 
 # Endpoints that bypass the login gate.
-_OPEN_ENDPOINTS = {"login", "static"}
+# webhook_lob is open because Lob can't log in — its requests are
+# authenticated by HMAC signature instead (see lob_sender/webhook.py).
+_OPEN_ENDPOINTS = {"login", "static", "webhook_lob"}
 
 
 @app.before_request
@@ -1656,6 +1658,23 @@ def action_test_send():
 def api_task_status():
     with TASK_LOCK:
         return jsonify(dict(TASK_STATE))
+
+
+@app.post("/webhooks/lob")
+def webhook_lob():
+    """
+    Lob -> us: per-letter status events (mailed, delivered, returned, etc).
+    Signature is verified inside handle_request when LOB_WEBHOOK_SECRET is set.
+    """
+    from lob_sender.webhook import handle_request as _lob_handle
+    code, body = _lob_handle(
+        raw_body=request.get_data() or b"",
+        signature=request.headers.get("Lob-Signature")
+                  or request.headers.get("X-Lob-Signature"),
+        timestamp=request.headers.get("Lob-Signature-Timestamp")
+                  or request.headers.get("X-Lob-Signature-Timestamp"),
+    )
+    return jsonify(body), code
 
 
 # ---------------------------------------------------------------------------
