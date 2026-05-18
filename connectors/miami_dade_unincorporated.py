@@ -60,9 +60,14 @@ COLUMN_MAP = {
     "DistrictNumber":   "district_number",
 }
 
+import os
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 AUDIT_DIR = PROJECT_ROOT / "audit" / SOURCE
-STATE_FILE = PROJECT_ROOT / "data" / f"{SOURCE}_last_run.txt"
+# STATE_FILE: on Render (or anywhere with a persistent disk), set the DATA_DIR
+# env var to that mount (e.g. /var/data) so the last-run date survives deploys.
+_DATA_DIR = Path(os.environ.get("DATA_DIR") or (PROJECT_ROOT / "data"))
+STATE_FILE = _DATA_DIR / f"{SOURCE}_last_run.txt"
 
 # Form values — match the visible labels exactly
 CASE_TYPE = "All Case Types"

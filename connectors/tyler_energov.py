@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass
@@ -55,7 +56,10 @@ from db import init_db, upsert_violations
 from parser import build_record
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-WATERMARK_DIR = PROJECT_ROOT / "data"
+# WATERMARK_DIR: on Render (or anywhere with a persistent disk), set the
+# DATA_DIR env var to that mount (e.g. /var/data) so watermarks survive
+# deploys. Locally it defaults to the project's data/ folder.
+WATERMARK_DIR = Path(os.environ.get("DATA_DIR") or (PROJECT_ROOT / "data"))
 
 # Tyler's request body has 8+ criteria sub-blocks plus per-module sort lists.
 # Hand-rebuilding it is fragile (Tyler validates fields silently). We ship a
