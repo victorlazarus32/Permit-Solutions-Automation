@@ -1651,3 +1651,94 @@ details[open] .intake-section-title::after { content: "−"; background: var(--i
   .topnav       { flex-wrap: wrap; }
   .form-row     { grid-template-columns: 1fr; }
 }
+
+/* ===== Mobile hamburger button (visible only on phones) ===== */
+.mobile-menu-toggle {
+  display: none;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--ink);
+  align-items: center;
+  justify-content: center;
+}
+.mobile-menu-toggle:active { background: var(--surface-2, #f4f4f0); }
+
+/* ===== Phone-sized layout (<= 640px) ===== */
+@media (max-width: 640px) {
+  /* Tighter topbar — show hamburger, hide nav until tapped */
+  .topbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .brand-logo { width: 36px; height: 36px; }
+  .brand-text { display: none; }                    /* free up space; logo alone IDs the brand */
+  .quick-search {
+    order: 99;                                       /* drops below the rest as full-width */
+    flex-basis: 100%;
+    max-width: 100%;
+    margin: 0;
+  }
+  .topbar-user { font-size: 0.82rem; }
+  .mobile-menu-toggle { display: inline-flex; }
+  .topnav {
+    display: none;
+    flex-basis: 100%;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .topnav.topnav-open { display: flex; }
+  .topnav a {
+    padding: 12px 8px;
+    border-radius: 6px;
+    font-size: 0.98rem;
+  }
+
+  /* Content padding */
+  .container { padding: 14px; }
+
+  /* Hero scale-down */
+  .hero h1 { font-size: 1.5rem; }
+  .hero-sub { font-size: 0.92rem; }
+
+  /* Wide tables: horizontal scroll wrapper so columns stay readable */
+  .data-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .data-table thead, .data-table tbody, .data-table tr { display: table; width: 100%; table-layout: auto; }
+  .data-table td, .data-table th { white-space: nowrap; }
+  .cell-narrative {
+    white-space: normal;
+    max-width: 220px;
+    word-wrap: break-word;
+  }
+
+  /* Forms stack vertically */
+  .form-row, .form-row.addr-csz { display: flex; flex-direction: column; gap: 10px; }
+  .form-row .form-field, .form-row.addr-csz .form-field { max-width: 100% !important; }
+
+  /* Bigger tap targets on buttons / chips */
+  .btn-primary, .btn-secondary { min-height: 44px; padding: 10px 16px; }
+  .btn-tiny { min-height: 36px; padding: 6px 10px; }
+
+  /* Action cards full-width and tighter padding */
+  .lead-card { padding: 14px; }
+  .lead-hero-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .lead-kv .kv { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .lead-kv .k { font-size: 0.78rem; }
+
+  /* Footer simpler */
+  .footer { flex-direction: column; gap: 4px; text-align: center; padding: 16px; }
+}

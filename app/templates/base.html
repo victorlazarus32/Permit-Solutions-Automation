@@ -30,7 +30,16 @@
     <div class="qs-results" id="qs-results" hidden></div>
   </div>
 
-  <nav class="topnav">
+  <button type="button" class="mobile-menu-toggle"
+          aria-label="Toggle menu" aria-controls="primary-nav" aria-expanded="false">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </button>
+
+  <nav class="topnav" id="primary-nav">
     <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
     <a href="{{ url_for('queue') }}"     {% if request.endpoint == 'queue'     %}class="active"{% endif %}>Letter Queue</a>
     <a href="{{ url_for('sent') }}"      {% if request.endpoint == 'sent'      %}class="active"{% endif %}>Sent Letters</a>
@@ -72,6 +81,24 @@
 </footer>
 
 <script>
+/* ===== Mobile menu toggle ===== */
+(function() {
+  var btn = document.querySelector('.mobile-menu-toggle');
+  var nav = document.getElementById('primary-nav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function() {
+    var open = nav.classList.toggle('topnav-open');
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  // Auto-close after clicking a nav link
+  nav.querySelectorAll('a').forEach(function(a) {
+    a.addEventListener('click', function() {
+      nav.classList.remove('topnav-open');
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  });
+})();
+
 /* ===== Toast auto-dismiss ===== */
 (function() {
   document.querySelectorAll('.toast').forEach(function(t) {
