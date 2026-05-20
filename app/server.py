@@ -790,6 +790,19 @@ def _fs(form, name: str) -> str | None:
     return raw or None
 
 
+def _parse_money(raw) -> float:
+    """Parse a money-ish string ('$1,250.00', '1250', '1,250') to a float."""
+    if raw is None:
+        return 0.0
+    s = str(raw).strip().replace("$", "").replace(",", "").replace(" ", "")
+    if not s:
+        return 0.0
+    try:
+        return max(0.0, float(s))
+    except ValueError:
+        return 0.0
+
+
 @app.post("/actions/log-intake")
 def action_log_intake():
     """Save a comprehensive lead-intake record. Auto-calculates score + temperature."""
@@ -1077,7 +1090,7 @@ def _render_invoice_pdf(inv: dict) -> bytes:
         except (ValueError, AttributeError):
             issued_display = inv["issued_at"][:10]
     elif inv.get("status") == "draft":
-        issued_display = _fmt(dt.date.today()) + "  (DRAFT)"
+        issued_display = _fmt(dt.date.today()) + "  (ESTIMATE)"
 
     due_display = ""
     if inv.get("due_at"):
@@ -1115,6 +1128,7 @@ def _render_invoice_pdf(inv: dict) -> bytes:
         total=float(inv["total"]),
         amount_paid=float(inv["amount_paid"]),
         balance_due=float(inv.get("balance_due", 0)),
+        deposit_amount=float(inv.get("deposit_amount") or 0),
         issued_display=issued_display,
         due_display=due_display,
         terms=inv.get("terms"),
@@ -1193,6 +1207,7 @@ def invoice_new():
                 contract_id=_fi(f, "contract_id"),
                 line_items=line_items,
                 tax_rate=tax_rate,
+                deposit_amount=_parse_money(f.get("deposit_amount")),
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms") or "Due on receipt",
                 notes=_fs(f, "notes"),
@@ -1278,6 +1293,7 @@ def invoice_edit(invoice_id: int):
                 property_zip=_fs(f, "property_zip"),
                 line_items=line_items,
                 tax_rate=tax_rate,
+                deposit_amount=_parse_money(f.get("deposit_amount")),
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms"),
                 notes=_fs(f, "notes"),

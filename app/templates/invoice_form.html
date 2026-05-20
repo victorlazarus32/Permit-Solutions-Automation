@@ -192,6 +192,24 @@
       </div>
       <div class="tot-row"><span>Tax</span><span id="tax-display" class="num">$0.00</span></div>
       <div class="tot-row total"><span>Total</span><span id="total-display" class="num">$0.00</span></div>
+
+      <!-- Deposit: user types a number + picks $ or %. JS converts to a real
+           dollar value and stores it in the hidden field that submits. -->
+      <div class="tot-row" style="margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px;">
+        <label for="deposit_input" style="margin: 0;">Deposit</label>
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <input type="text" id="deposit_input" inputmode="decimal" style="width: 70px; text-align: right;"
+                 value="{{ '{:.2f}'.format(invoice.deposit_amount) if is_edit and invoice.deposit_amount else '' }}"
+                 placeholder="0">
+          <select id="deposit_mode" style="width: 56px;">
+            <option value="dollar" selected>$</option>
+            <option value="percent">%</option>
+          </select>
+        </div>
+      </div>
+      <div class="tot-row"><span>Deposit due</span><span id="deposit-display" class="num">$0.00</span></div>
+      <div class="tot-row"><span>Balance after deposit</span><span id="balance-after-deposit-display" class="num">$0.00</span></div>
+      <input type="hidden" name="deposit_amount" id="deposit_amount" value="{{ '{:.2f}'.format(invoice.deposit_amount) if is_edit and invoice.deposit_amount else '0.00' }}">
     </div>
   </div>
 
@@ -259,6 +277,22 @@
     document.getElementById('subtotal-display').textContent = fmt(subtotal);
     document.getElementById('tax-display').textContent      = fmt(tax);
     document.getElementById('total-display').textContent    = fmt(total);
+
+    // Deposit: convert user input + mode to a real dollar amount.
+    var depInput = document.getElementById('deposit_input');
+    var depMode  = document.getElementById('deposit_mode');
+    var depRaw   = depInput ? parseNum(depInput.value) : 0;
+    var depMode_ = depMode  ? depMode.value : 'dollar';
+    var depDue   = depMode_ === 'percent'
+                   ? +(total * (depRaw / 100)).toFixed(2)
+                   : +depRaw.toFixed(2);
+    if (depDue < 0) depDue = 0;
+    if (depDue > total) depDue = total;     // can't deposit more than the total
+
+    var balanceAfter = +(total - depDue).toFixed(2);
+    document.getElementById('deposit-display').textContent              = fmt(depDue);
+    document.getElementById('balance-after-deposit-display').textContent = fmt(balanceAfter);
+    document.getElementById('deposit_amount').value                      = depDue.toFixed(2);
   }
   function makeRowTemplate() {
     var tr = document.createElement('tr');
@@ -274,6 +308,11 @@
 
   document.getElementById('line-items').addEventListener('input', recomputeAll);
   document.getElementById('tax_rate').addEventListener('input', recomputeAll);
+  ['deposit_input', 'deposit_mode'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', recomputeAll);
+    if (el) el.addEventListener('change', recomputeAll);
+  });
 
   document.getElementById('add-line').addEventListener('click', function() {
     var tbody = document.querySelector('#line-items tbody');

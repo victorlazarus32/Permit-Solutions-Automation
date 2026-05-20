@@ -303,7 +303,8 @@ def _migrate_invoices(conn) -> None:
         ("property_city",  "TEXT"),
         ("property_state", "TEXT"),
         ("property_zip",   "TEXT"),
-        ("contract_id",    "INTEGER"),  # FK -> contracts.id, nullable
+        ("contract_id",    "INTEGER"),                    # FK -> contracts.id, nullable
+        ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
     ]
     for col, ddl in additions:
         if col not in existing:

@@ -265,7 +265,7 @@
       <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
     </div>
     <div class="meta">
-      <div class="doctype">Invoice</div>
+      <div class="doctype">{{ 'Estimate' if status == 'draft' else 'Invoice' }}</div>
       <div class="invoice-number">{{ invoice_number }}</div>
       <span class="invoice-meta-line">305-600-9422</span>
       <span class="invoice-meta-line">help@permitsolutions.us</span>
@@ -355,6 +355,16 @@
         <td class="label">Total</td>
         <td class="amount">${{ '{:,.2f}'.format(total) }}</td>
       </tr>
+      {% if deposit_amount and deposit_amount > 0 %}
+      <tr>
+        <td class="label">Deposit Due Now</td>
+        <td class="amount">${{ '{:,.2f}'.format(deposit_amount) }}</td>
+      </tr>
+      <tr class="balance">
+        <td class="label">Balance After Deposit</td>
+        <td class="amount">${{ '{:,.2f}'.format(total - deposit_amount) }}</td>
+      </tr>
+      {% endif %}
       {% if amount_paid > 0 %}
       <tr>
         <td class="label">Amount Paid</td>

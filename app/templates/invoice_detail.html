@@ -115,7 +115,7 @@
     <div class="lead-card">
       <h3 class="lead-card-title">Status & Dates</h3>
       <div class="lead-kv">
-        <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ inv.status }}">{{ inv.status|upper }}</span></span></div>
+        <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ inv.status }}">{{ 'ESTIMATE' if inv.status == 'draft' else inv.status|upper }}</span></span></div>
         <div class="kv"><span class="k">Issued</span><span class="v">{{ inv.issued_at[:10] if inv.issued_at else '—' }}</span></div>
         <div class="kv"><span class="k">Due</span><span class="v">{{ inv.due_at or '—' }}</span></div>
         {% if inv.paid_at %}<div class="kv"><span class="k">Paid</span><span class="v">{{ inv.paid_at[:10] }}</span></div>{% endif %}
