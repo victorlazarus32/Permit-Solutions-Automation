@@ -28,6 +28,9 @@ inbox/processed/*/*.xlsx
 cloudflared*.exe
 cloudflared-windows-*
 
+# Playwright-installed browser binaries (downloaded at build time)
+.playwright/
+
 # Logs
 logs/
 *.log
