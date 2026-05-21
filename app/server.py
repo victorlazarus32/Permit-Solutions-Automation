@@ -49,7 +49,12 @@ from flask import Flask, render_template, redirect, url_for, request, flash, jso
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
-from db import DB_PATH
+from db import DB_PATH, init_db
+
+# Ensure all tables exist at web-service startup. Without this, new tables
+# (scope_modules, contracts, etc.) wouldn't be created until a scraper run,
+# and any UI that queries them blows up with "no such table".
+init_db()
 from scripts.morning_run import (run_miami_dade, run_homestead,
                                   run_homestead_tyler, fetch_totals, run_send)
 
