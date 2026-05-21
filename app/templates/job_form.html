@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}New Job{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('jobs_list') }}">Jobs</a> · New</p>
+      <h1>New Job</h1>
+      {% if prefill.case_number %}
+      <p class="hero-sub">Prefilled from case <span class="mono">{{ prefill.case_number }}</span></p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<form method="POST" class="lead-card" style="max-width: 760px;">
+  {% if prefill.source %}<input type="hidden" name="source" value="{{ prefill.source }}">{% endif %}
+  {% if prefill.case_number %}<input type="hidden" name="case_number" value="{{ prefill.case_number }}">{% endif %}
+
+  <h3 class="lead-card-title">Client</h3>
+  <div class="form-row">
+    <div class="form-field">
+      <label for="client_name">Client name <span style="color: var(--red);">*</span></label>
+      <input type="text" name="client_name" id="client_name" required
+             value="{{ prefill.client_name or '' }}">
+    </div>
+    <div class="form-field">
+      <label for="client_phone">Phone</label>
+      <input type="text" name="client_phone" id="client_phone"
+             value="{{ prefill.client_phone or '' }}">
+    </div>
+  </div>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="client_email">Email</label>
+      <input type="email" name="client_email" id="client_email"
+             value="{{ prefill.client_email or '' }}">
+    </div>
+  </div>
+
+  <h3 class="lead-card-title" style="margin-top: 1.25rem;">Property</h3>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="property_address">Property address</label>
+      <input type="text" name="property_address" id="property_address"
+             value="{{ prefill.property_address or '' }}">
+    </div>
+  </div>
+
+  <h3 class="lead-card-title" style="margin-top: 1.25rem;">Initial Status</h3>
+  <div class="form-row">
+    <div class="form-field">
+      <label for="status">Where is this job right now?</label>
+      <select name="status" id="status">
+        {% for key, label in statuses %}
+          <option value="{{ key }}" {% if key == 'intake' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="notes">Internal notes</label>
+      <textarea name="notes" id="notes" rows="3"></textarea>
+    </div>
+  </div>
+
+  <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
+    <button type="submit" class="btn-primary">Create Job</button>
+    <a href="{{ url_for('jobs_list') }}" class="btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

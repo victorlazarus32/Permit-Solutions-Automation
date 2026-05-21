@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.job_number }}{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('jobs_list') }}">Jobs</a> · {{ job.job_number }}</p>
+      <h1>{{ job.client_name }}</h1>
+      <p class="hero-sub">
+        <span class="mono">{{ job.job_number }}</span>
+        {% if job.property_address %} · {{ job.property_address }}{% endif %}
+        {% if job.case_number %} · <span class="mono">{{ job.case_number }}</span>{% endif %}
+      </p>
+    </div>
+    <div>
+      <span class="status status-{{ job.status }}" style="font-size: 0.9rem; padding: 6px 12px;">
+        {{ status_label.get(job.status, job.status) }}
+      </span>
+    </div>
+  </div>
+</section>
+
+<div class="lead-cols">
+  <div class="lead-col">
+
+    <!-- Status transition -->
+    <div class="lead-card">
+      <h3 class="lead-card-title">Move to New Status</h3>
+      <form method="POST" action="{{ url_for('job_transition_status', job_id=job.id) }}">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="to_status">New status</label>
+            <select name="to_status" id="to_status" required>
+              {% for key, label in statuses %}
+                {% if key != job.status %}
+                  <option value="{{ key }}">{{ label }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-field">
+            <label for="note">Note (optional — why this transition?)</label>
+            <input type="text" name="note" id="note" placeholder="e.g. Engineer sent stamped drawings">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">Update Status</button>
+      </form>
+    </div>
+
+    <!-- Tasks -->
+    <div class="lead-card">
+      <h3 class="lead-card-title">Tasks</h3>
+
+      {% set open_tasks = tasks | selectattr('completed_at', 'none') | list %}
+      {% set done_tasks = tasks | rejectattr('completed_at', 'none') | list %}
+
+      {% if open_tasks %}
+      <ul style="list-style: none; padding: 0; margin: 0 0 12px;">
+        {% for t in open_tasks %}
+        <li style="display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border);">
+          <form method="POST" action="{{ url_for('job_task_complete', task_id=t.id) }}" style="margin-top: 2px;">
+            <button type="submit" class="task-checkbox" title="Mark complete" aria-label="Complete">☐</button>
+          </form>
+          <div style="flex: 1;">
+            <div style="font-weight: 500;">{{ t.description }}</div>
+            <div style="font-size: 0.78rem; color: var(--ink-mute); margin-top: 2px;">
+              {% if t.due_at %}Due {{ t.due_at }}{% endif %}
+              {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
+            </div>
+          </div>
+          <form method="POST" action="{{ url_for('job_task_delete', task_id=t.id) }}"
+                onsubmit="return confirm('Delete this task?');" style="margin-top: 2px;">
+            <button type="submit" class="btn-link" style="color: var(--ink-mute); background: none; border: none; cursor: pointer;">×</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-state" style="margin: 4px 0 12px; padding: 0;">No open tasks.</p>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('job_task_add', job_id=job.id) }}" style="display: flex; gap: 8px; align-items: flex-end;">
+        <div class="form-field" style="flex: 1;">
+          <label for="description" style="font-size: 0.78rem;">Add a task</label>
+          <input type="text" name="description" id="description" required placeholder="e.g. Email survey request to client">
+        </div>
+        <div class="form-field" style="max-width: 150px;">
+          <label for="due_at" style="font-size: 0.78rem;">Due</label>
+          <input type="date" name="due_at" id="due_at">
+        </div>
+        <button type="submit" class="btn-secondary btn-tiny" style="margin-bottom: 4px;">Add</button>
+      </form>
+
+      {% if done_tasks %}
+      <details style="margin-top: 14px;">
+        <summary style="cursor: pointer; font-size: 0.85rem; color: var(--ink-mute);">
+          Completed ({{ done_tasks|length }})
+        </summary>
+        <ul style="list-style: none; padding: 0; margin: 8px 0 0;">
+          {% for t in done_tasks %}
+          <li style="display: flex; gap: 10px; padding: 6px 0; font-size: 0.88rem; color: var(--ink-mute);">
+            <span>✓</span>
+            <span style="flex: 1; text-decoration: line-through;">{{ t.description }}</span>
+            <span style="font-size: 0.75rem;">{{ (t.completed_at or '')[:10] }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </div>
+
+    <!-- Notes -->
+    {% if job.notes %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Notes</h3>
+      <div style="white-space: pre-wrap;">{{ job.notes }}</div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <div class="lead-col">
+    <!-- Client + linked invoice -->
+    <div class="lead-card">
+      <h3 class="lead-card-title">Client</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Name</span><span class="v">{{ job.client_name }}</span></div>
+        {% if job.client_phone %}<div class="kv"><span class="k">Phone</span><span class="v mono">{{ job.client_phone }}</span></div>{% endif %}
+        {% if job.client_email %}<div class="kv"><span class="k">Email</span><span class="v mono">{{ job.client_email }}</span></div>{% endif %}
+        {% if job.property_address %}<div class="kv"><span class="k">Property</span><span class="v">{{ job.property_address }}</span></div>{% endif %}
+      </div>
+    </div>
+
+    {% if job.source and job.case_number %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Linked Violation</h3>
+      <p><a href="{{ url_for('lead_detail', source=job.source, case_number=job.case_number) }}">
+        <span class="mono">{{ job.case_number }}</span> · {{ job.source.replace('_', ' ') }}
+      </a></p>
+    </div>
+    {% endif %}
+
+    <!-- Status history -->
+    <div class="lead-card">
+      <h3 class="lead-card-title">Status History</h3>
+      {% if history %}
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        {% for h in history %}
+        <li style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem;">
+          <div>
+            {% if h.from_status %}<span style="color: var(--ink-mute);">{{ status_label.get(h.from_status, h.from_status) }} →</span>{% endif %}
+            <strong>{{ status_label.get(h.to_status, h.to_status) }}</strong>
+          </div>
+          <div style="font-size: 0.78rem; color: var(--ink-mute); margin-top: 2px;">
+            {{ (h.transitioned_at or '')[:16].replace('T', ' ') }}
+            {% if h.transitioned_by %} · by {{ h.transitioned_by }}{% endif %}
+          </div>
+          {% if h.note %}<div style="font-size: 0.84rem; margin-top: 4px; font-style: italic; color: var(--ink-mute);">{{ h.note }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-state" style="margin: 0; padding: 8px;">No history yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .lead-cols { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+  @media (max-width: 980px) { .lead-cols { grid-template-columns: 1fr; } }
+  .task-checkbox {
+    background: none; border: none; cursor: pointer;
+    font-size: 1.1rem; line-height: 1;
+    color: var(--ink-mute); padding: 0;
+  }
+  .task-checkbox:hover { color: var(--orange); }
+
+  /* Re-declare status colors so this page has them even without jobs_list.html loaded */
+  .status-intake               { background: #eef2ff; color: #4338ca; }
+  .status-awaiting_survey      { background: #fef3c7; color: #92400e; }
+  .status-awaiting_engineer    { background: #fef3c7; color: #92400e; }
+  .status-permit_prep          { background: #e0f2fe; color: #075985; }
+  .status-submitted            { background: #dbeafe; color: #1e40af; }
+  .status-review_comments      { background: #fee2e2; color: #991b1b; }
+  .status-awaiting_inspection  { background: #ede9fe; color: #5b21b6; }
+  .status-inspection_failed    { background: #fee2e2; color: #991b1b; }
+  .status-approved             { background: #d1fae5; color: #065f46; }
+  .status-closed_won           { background: #d1fae5; color: #065f46; }
+  .status-closed_lost          { background: #f3f4f6; color: #4b5563; }
+</style>
+{% endblock %}

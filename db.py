@@ -269,6 +269,65 @@ CREATE TABLE IF NOT EXISTS scope_modules (
 );
 
 CREATE INDEX IF NOT EXISTS ix_scope_modules_category ON scope_modules(category, sort_order);
+
+-- ===== Jobs (operational workflow / mini-CRM) =====
+-- A Job is the engagement with a client for a specific permit case from
+-- intake through close-out. It ties a violation lead + invoices + tasks +
+-- status history together so we can see the entire lifecycle in one place.
+CREATE TABLE IF NOT EXISTS jobs (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_number          TEXT NOT NULL UNIQUE,            -- PSS-J-2026-0001
+    -- Links to other entities (all nullable — a job may stand alone)
+    source              TEXT,
+    case_number         TEXT,
+    invoice_id          INTEGER,
+    -- Client + property snapshot
+    client_name         TEXT NOT NULL,
+    client_phone        TEXT,
+    client_email        TEXT,
+    property_address    TEXT,
+    -- Workflow
+    status              TEXT NOT NULL DEFAULT 'intake',
+    -- Lifecycle
+    opened_at           TEXT NOT NULL,
+    closed_at           TEXT,
+    -- Free-form
+    notes               TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    FOREIGN KEY (source, case_number) REFERENCES violations(source, case_number),
+    FOREIGN KEY (invoice_id)          REFERENCES invoices(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_jobs_status ON jobs(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS ix_jobs_case   ON jobs(source, case_number);
+
+CREATE TABLE IF NOT EXISTS job_status_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          INTEGER NOT NULL,
+    from_status     TEXT,
+    to_status       TEXT NOT NULL,
+    transitioned_at TEXT NOT NULL,
+    transitioned_by TEXT,
+    note            TEXT,
+    FOREIGN KEY (job_id) REFERENCES jobs(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_job_status_hist ON job_status_history(job_id, transitioned_at DESC);
+
+CREATE TABLE IF NOT EXISTS job_tasks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id          INTEGER NOT NULL,
+    description     TEXT NOT NULL,
+    due_at          TEXT,
+    assigned_to     TEXT,
+    completed_at    TEXT,
+    completed_by    TEXT,
+    created_at      TEXT NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES jobs(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_job_tasks_open ON job_tasks(job_id, completed_at);
 """
 
 

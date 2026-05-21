@@ -1129,6 +1129,7 @@ import invoices as inv_mod  # noqa: E402
 import contracts as contracts_mod  # noqa: E402
 import reports as reports_mod  # noqa: E402
 import scope_modules as scope_mod  # noqa: E402
+import jobs as jobs_mod  # noqa: E402
 from app.quotes import random_quote  # noqa: E402
 
 
@@ -1559,6 +1560,150 @@ def contract_edit(contract_id: int):
         flash(f"Contract \"{c['name']}\" updated.", "success")
         return redirect(url_for("contracts_list"))
     return render_template("contract_form.html", contract=c)
+
+
+# ===== Jobs (operational workflow / mini-CRM) =====
+
+@app.route("/jobs")
+def jobs_list():
+    status_filter = (request.args.get("status") or "").strip() or None
+    items = jobs_mod.list_jobs(status=status_filter, limit=500)
+    counts = jobs_mod.status_counts()
+    return render_template(
+        "jobs_list.html",
+        jobs=items,
+        count=len(items),
+        active_status=status_filter,
+        statuses=jobs_mod.STATUSES,
+        status_label=jobs_mod.STATUS_LABEL,
+        counts=counts,
+        open_tasks=jobs_mod.list_open_tasks_all(limit=20),
+    )
+
+
+@app.route("/jobs/new", methods=["GET", "POST"])
+def job_new():
+    # Optional prefill from a violation (?case=source|CASE_NUMBER)
+    prefill: dict = {}
+    case_key = (request.args.get("case") or "").strip()
+    if case_key and "|" in case_key:
+        src, cn = case_key.split("|", 1)
+        try:
+            p = inv_mod.prefill_from_case(src, cn)
+            prefill = {
+                "client_name":      p.get("client_name") or "",
+                "client_phone":     p.get("client_phone") or "",
+                "client_email":     p.get("client_email") or "",
+                "property_address": p.get("property_address") or "",
+                "source":           src,
+                "case_number":      cn,
+            }
+        except LookupError as e:
+            flash(str(e), "error")
+
+    if request.method == "POST":
+        f = request.form
+        try:
+            j = jobs_mod.create_job(
+                client_name=(f.get("client_name") or "").strip(),
+                client_phone=_fs(f, "client_phone"),
+                client_email=_fs(f, "client_email"),
+                property_address=_fs(f, "property_address"),
+                source=_fs(f, "source"),
+                case_number=_fs(f, "case_number"),
+                notes=_fs(f, "notes"),
+                initial_status=(f.get("status") or "intake").strip(),
+                initial_by=session.get("user"),
+            )
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(request.url)
+        flash(f"Created job {j['job_number']}.", "success")
+        return redirect(url_for("job_detail", job_id=j["id"]))
+
+    return render_template(
+        "job_form.html",
+        job=None,
+        prefill=prefill,
+        statuses=jobs_mod.STATUSES,
+    )
+
+
+@app.route("/jobs/<int:job_id>")
+def job_detail(job_id: int):
+    j = jobs_mod.get_job(job_id)
+    if not j:
+        flash("Job not found.", "error")
+        return redirect(url_for("jobs_list"))
+    return render_template(
+        "job_detail.html",
+        job=j,
+        tasks=jobs_mod.list_tasks(job_id),
+        history=jobs_mod.list_status_history(job_id),
+        statuses=jobs_mod.STATUSES,
+        status_label=jobs_mod.STATUS_LABEL,
+    )
+
+
+@app.post("/jobs/<int:job_id>/status")
+def job_transition_status(job_id: int):
+    f = request.form
+    to_status = (f.get("to_status") or "").strip()
+    note      = _fs(f, "note")
+    try:
+        j = jobs_mod.transition_status(
+            job_id, to_status=to_status,
+            by=session.get("user"), note=note,
+        )
+    except (ValueError, LookupError) as e:
+        flash(str(e), "error")
+        return redirect(url_for("job_detail", job_id=job_id))
+    flash(f"Job {j['job_number']} moved to {jobs_mod.STATUS_LABEL.get(to_status, to_status)}.", "success")
+    return redirect(url_for("job_detail", job_id=job_id))
+
+
+@app.post("/jobs/<int:job_id>/tasks")
+def job_task_add(job_id: int):
+    f = request.form
+    try:
+        jobs_mod.add_task(
+            job_id,
+            description=(f.get("description") or "").strip(),
+            due_at=_fs(f, "due_at"),
+            assigned_to=_fs(f, "assigned_to"),
+        )
+    except (ValueError, LookupError) as e:
+        flash(str(e), "error")
+    return redirect(url_for("job_detail", job_id=job_id))
+
+
+@app.post("/jobs/tasks/<int:task_id>/complete")
+def job_task_complete(task_id: int):
+    try:
+        t = jobs_mod.complete_task(task_id, by=session.get("user"))
+    except LookupError as e:
+        flash(str(e), "error")
+        return redirect(url_for("jobs_list"))
+    return redirect(url_for("job_detail", job_id=t["job_id"]))
+
+
+@app.post("/jobs/tasks/<int:task_id>/reopen")
+def job_task_reopen(task_id: int):
+    try:
+        t = jobs_mod.reopen_task(task_id)
+    except LookupError as e:
+        flash(str(e), "error")
+        return redirect(url_for("jobs_list"))
+    return redirect(url_for("job_detail", job_id=t["job_id"]))
+
+
+@app.post("/jobs/tasks/<int:task_id>/delete")
+def job_task_delete(task_id: int):
+    t = jobs_mod._get_task(task_id)  # private but useful here
+    jobs_mod.delete_task(task_id)
+    if t:
+        return redirect(url_for("job_detail", job_id=t["job_id"]))
+    return redirect(url_for("jobs_list"))
 
 
 @app.post("/contracts/<int:contract_id>/delete")
