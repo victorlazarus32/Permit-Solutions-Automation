@@ -381,6 +381,7 @@ def _migrate_invoices(conn) -> None:
         ("contract_id",    "INTEGER"),                    # FK -> contracts.id, nullable
         ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
         ("scope_of_services", "TEXT"),                    # assembled scope text for this invoice
+        ("client_summary",    "TEXT"),                    # plain-English "what this means" blurb for the client
     ]
     for col, ddl in additions:
         if col not in existing:

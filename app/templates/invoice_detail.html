@@ -53,6 +53,13 @@
     </div>
     {% endif %}
 
+    {% if inv.client_summary %}
+    <div class="lead-card" style="background: linear-gradient(180deg, #fff7ed 0%, #ffffff 60%); border-left: 4px solid var(--orange, #f08a24);">
+      <h3 class="lead-card-title">In Plain English</h3>
+      <div style="white-space: pre-wrap; font-size: 0.97rem; line-height: 1.6;">{{ inv.client_summary }}</div>
+    </div>
+    {% endif %}
+
     {% if inv.scope_of_services %}
     <div class="lead-card">
       <h3 class="lead-card-title">Scope of Services</h3>

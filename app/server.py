@@ -1137,6 +1137,7 @@ import contracts as contracts_mod  # noqa: E402
 import reports as reports_mod  # noqa: E402
 import scope_modules as scope_mod  # noqa: E402
 import jobs as jobs_mod  # noqa: E402
+import client_summaries as cs_mod  # noqa: E402
 from app.quotes import random_quote  # noqa: E402
 
 
@@ -1238,6 +1239,7 @@ def _render_invoice_pdf(inv: dict) -> bytes:
         balance_due=float(inv.get("balance_due", 0)),
         deposit_amount=float(inv.get("deposit_amount") or 0),
         scope_of_services=inv.get("scope_of_services") or "",
+        client_summary=inv.get("client_summary") or "",
         issued_display=issued_display,
         due_display=due_display,
         terms=inv.get("terms"),
@@ -1318,6 +1320,7 @@ def invoice_new():
                 tax_rate=tax_rate,
                 deposit_amount=_parse_money(f.get("deposit_amount")),
                 scope_of_services=_fs(f, "scope_of_services"),
+                client_summary=_fs(f, "client_summary"),
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms") or "Due on receipt",
                 notes=_fs(f, "notes"),
@@ -1372,6 +1375,7 @@ def invoice_new():
         contracts_available=contracts_mod.list_contracts(),
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
         scope_modules_available=scope_mod.list_modules(),
+        client_summary_templates=cs_mod.TEMPLATES,
     )
 
 
@@ -1432,6 +1436,7 @@ def invoice_edit(invoice_id: int):
                 tax_rate=tax_rate,
                 deposit_amount=_parse_money(f.get("deposit_amount")),
                 scope_of_services=_fs(f, "scope_of_services"),
+                client_summary=_fs(f, "client_summary"),
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms"),
                 notes=_fs(f, "notes"),
@@ -1452,6 +1457,7 @@ def invoice_edit(invoice_id: int):
         contracts_available=contracts_mod.list_contracts(),
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
         scope_modules_available=scope_mod.list_modules(),
+        client_summary_templates=cs_mod.TEMPLATES,
     )
 
 
@@ -1810,6 +1816,15 @@ def scope_modules_seed():
     n = scope_mod.seed_defaults(force=False)
     flash(f"Seeded {n} default module(s).", "success" if n else "info")
     return redirect(url_for("scope_modules_list"))
+
+
+@app.get("/api/client-summary")
+def api_client_summary():
+    """Render a client-summary template by key with optional variables."""
+    key = (request.args.get("key") or "").strip()
+    jurisdiction = (request.args.get("jurisdiction") or "").strip()
+    text = cs_mod.render_template(key, {"jurisdiction": jurisdiction}) or ""
+    return jsonify({"key": key, "text": text})
 
 
 @app.post("/api/scope-modules/assemble")

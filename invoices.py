@@ -208,6 +208,7 @@ def create_invoice(
     tax_rate: float = 0.0,
     deposit_amount: float = 0.0,
     scope_of_services: str | None = None,
+    client_summary: str | None = None,
     due_at: str | None = None,
     terms: str | None = "Due on receipt",
     notes: str | None = None,
@@ -232,6 +233,7 @@ def create_invoice(
                 property_address, property_city, property_state, property_zip,
                 line_items, subtotal, tax_rate, tax_amount, total, amount_paid,
                 status, due_at, terms, notes, deposit_amount, scope_of_services,
+                client_summary,
                 created_at, updated_at
             ) VALUES (
                 :invoice_number, :source, :case_number, :contract_event_id, :contract_id,
@@ -240,6 +242,7 @@ def create_invoice(
                 :property_address, :property_city, :property_state, :property_zip,
                 :line_items, :subtotal, :tax_rate, :tax_amount, :total, 0,
                 'draft', :due_at, :terms, :notes, :deposit_amount, :scope_of_services,
+                :client_summary,
                 :created_at, :updated_at
             )
             """,
@@ -270,6 +273,7 @@ def create_invoice(
                 "notes":             notes,
                 "deposit_amount":    max(0.0, float(deposit_amount or 0.0)),
                 "scope_of_services": scope_of_services,
+                "client_summary":    client_summary,
                 "created_at":        now,
                 "updated_at":        now,
             },
@@ -293,7 +297,7 @@ def update_invoice(invoice_id: int, **fields) -> dict:
         "client_email", "client_phone",
         "property_address", "property_city", "property_state", "property_zip",
         "due_at", "terms", "notes", "tax_rate", "contract_id",
-        "deposit_amount", "scope_of_services",
+        "deposit_amount", "scope_of_services", "client_summary",
     }
     payload: dict[str, Any] = {}
     for k, v in fields.items():

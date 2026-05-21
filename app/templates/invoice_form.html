@@ -227,6 +227,71 @@
     </div>
   </div>
 
+  <!-- ===== Client Summary ("Explain Like Homeowner") =====
+       Plain-English blurb the homeowner can actually understand. Pick a
+       starter template, edit to taste. Prints at the top of the printed
+       invoice in a highlighted block. -->
+  <h3 class="lead-card-title" style="margin-top: 1.5rem;">Client Summary <span style="font-weight: 400; color: var(--ink-mute); font-size: 0.85rem;">("Explain Like Homeowner")</span></h3>
+
+  <div class="form-row">
+    <div class="form-field">
+      <label for="cs_template">Starter template (optional)</label>
+      <select id="cs_template">
+        <option value="">— None —</option>
+        {% for t in client_summary_templates %}
+          <option value="{{ t.key }}">{{ t.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-field" style="max-width: 220px;">
+      <label for="cs_jurisdiction">Jurisdiction (for template)</label>
+      <input type="text" id="cs_jurisdiction" list="cs_jurisdictions" placeholder="Miami-Dade County">
+      <datalist id="cs_jurisdictions">
+        <option value="Miami-Dade County">
+        <option value="the City of Homestead">
+        <option value="the City of Miami">
+        <option value="the City of Miami Beach">
+        <option value="the City of Coral Gables">
+        <option value="the City of Doral">
+      </datalist>
+    </div>
+    <div class="form-field" style="max-width: 160px; align-self: flex-end;">
+      <button type="button" id="cs_insert" class="btn-secondary">Insert template ↓</button>
+    </div>
+  </div>
+
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="client_summary">Plain-English summary (printed prominently on the invoice)</label>
+      <textarea name="client_summary" id="client_summary" rows="5"
+                placeholder="Short, jargon-free explanation of what this job actually means for the homeowner. Picks an invoice-defining moment of clarity. Or pick a template above and customize.">{{ invoice.client_summary if is_edit and invoice.client_summary else '' }}</textarea>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var btn = document.getElementById('cs_insert');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      var key = document.getElementById('cs_template').value;
+      var juris = document.getElementById('cs_jurisdiction').value;
+      if (!key) { alert('Pick a starter template first.'); return; }
+      btn.disabled = true; btn.textContent = 'Inserting…';
+      fetch('/api/client-summary?key=' + encodeURIComponent(key)
+            + '&jurisdiction=' + encodeURIComponent(juris))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var ta = document.getElementById('client_summary');
+          var existing = (ta.value || '').trim();
+          if (existing && !confirm('Replace the current summary with the template?')) return;
+          ta.value = d.text || '';
+        })
+        .catch(function(e) { alert('Could not fetch template: ' + e); })
+        .finally(function() { btn.disabled = false; btn.textContent = 'Insert template ↓'; });
+    });
+  })();
+  </script>
+
   <!-- ===== Scope of Services Generator =====
        Picks variables + modules, calls /api/scope-modules/assemble for a
        preview, drops result into the textarea. User can hand-edit before save. -->
