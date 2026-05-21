@@ -284,8 +284,8 @@ def update_invoice(invoice_id: int, **fields) -> dict:
     totals if line_items or tax_rate change.
     """
     inv = get_invoice(invoice_id)
-    if inv["status"] != "draft":
-        raise ValueError(f"Invoice {inv['invoice_number']} is {inv['status']!r}; only drafts are editable.")
+    if inv["status"] == "void":
+        raise ValueError(f"Invoice {inv['invoice_number']} is voided and cannot be edited.")
 
     settable = {
         "client_name",

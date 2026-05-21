@@ -131,14 +131,19 @@
       </div>
     </div>
 
-    {% if inv.status == 'draft' %}
+    {% if inv.status != 'void' %}
     <div class="lead-card">
       <h3 class="lead-card-title">Actions</h3>
       <a class="btn-secondary" href="{{ url_for('invoice_edit', invoice_id=inv.id) }}" style="display: block; margin-bottom: 8px;">Edit invoice</a>
-      <form method="POST" action="{{ url_for('invoice_mark_sent', invoice_id=inv.id) }}">
-        <button type="submit" class="btn-primary" style="width: 100%;">Mark as sent</button>
-      </form>
-      <p class="lead-card-desc" style="margin-top: 8px;">Once sent, the invoice is locked. Edits are no longer possible — void and reissue instead.</p>
+      {% if inv.status == 'draft' %}
+        <form method="POST" action="{{ url_for('invoice_mark_sent', invoice_id=inv.id) }}">
+          <button type="submit" class="btn-primary" style="width: 100%;">Mark as sent</button>
+        </form>
+      {% else %}
+        <p class="lead-card-desc" style="margin-top: 8px;">
+          This invoice has already been {{ inv.status }}. Edits here won't update the copy the client received — you'd need to re-send.
+        </p>
+      {% endif %}
     </div>
     {% endif %}
 
