@@ -1680,15 +1680,23 @@ def job_transition_status(job_id: int):
     f = request.form
     to_status = (f.get("to_status") or "").strip()
     note      = _fs(f, "note")
+    skip_auto = bool(f.get("skip_auto_tasks"))
     try:
         j = jobs_mod.transition_status(
             job_id, to_status=to_status,
             by=session.get("user"), note=note,
+            skip_auto_tasks=skip_auto,
         )
     except (ValueError, LookupError) as e:
         flash(str(e), "error")
         return redirect(url_for("job_detail", job_id=job_id))
-    flash(f"Job {j['job_number']} moved to {jobs_mod.STATUS_LABEL.get(to_status, to_status)}.", "success")
+
+    label = jobs_mod.STATUS_LABEL.get(to_status, to_status)
+    auto_count = 0 if skip_auto else len(jobs_mod.STATUS_AUTO_TASKS.get(to_status, []))
+    if auto_count:
+        flash(f"Job {j['job_number']} moved to {label} — {auto_count} follow-up task(s) added automatically.", "success")
+    else:
+        flash(f"Job {j['job_number']} moved to {label}.", "success")
     return redirect(url_for("job_detail", job_id=job_id))
 
 

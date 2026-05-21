@@ -52,6 +52,48 @@ STATUS_KEYS  = [k for k, _ in STATUSES]
 TERMINAL_STATUSES = {"closed_won", "closed_lost"}
 
 
+# ===== Status-transition auto-tasks =====
+# When a job moves INTO any of these statuses, the listed tasks are auto-
+# created on the job with a due date `due_in_days` from today. Each task
+# description gets an "[auto]" prefix so it's visually distinct from
+# manually-added tasks. Idempotent: if an OPEN auto-task with the same
+# description already exists for this job, we don't duplicate.
+STATUS_AUTO_TASKS: dict[str, list[dict]] = {
+    "awaiting_survey": [
+        {"description": "Email client requesting survey",                 "due_in_days": 1},
+    ],
+    "awaiting_engineer": [
+        {"description": "Send case packet to engineer",                   "due_in_days": 2},
+        {"description": "Follow up with engineer on ETA",                 "due_in_days": 5},
+    ],
+    "permit_prep": [
+        {"description": "Compile permit application package",             "due_in_days": 3},
+    ],
+    "submitted": [
+        {"description": "Follow up with city on review status",           "due_in_days": 5},
+    ],
+    "review_comments": [
+        {"description": "Draft response to city review comments",         "due_in_days": 3},
+    ],
+    "awaiting_inspection": [
+        {"description": "Confirm inspection date with client",            "due_in_days": 1},
+    ],
+    "inspection_failed": [
+        {"description": "Send deficiency notice to client",               "due_in_days": 1},
+        {"description": "Re-prepare submittal addressing deficiencies",   "due_in_days": 3},
+    ],
+    "approved": [
+        {"description": "Send close-out package to client",               "due_in_days": 2},
+        {"description": "Generate closing invoice for final payment",     "due_in_days": 1},
+    ],
+    "closed_won": [
+        {"description": "Email client thank-you + ask for Google review", "due_in_days": 1},
+    ],
+}
+
+AUTO_PREFIX = "[auto] "
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -189,8 +231,10 @@ def update_job(job_id: int, **fields) -> dict:
 
 
 def transition_status(job_id: int, *, to_status: str,
-                      by: str | None = None, note: str | None = None) -> dict:
-    """Move the job to a new status; append to status history."""
+                      by: str | None = None, note: str | None = None,
+                      skip_auto_tasks: bool = False) -> dict:
+    """Move the job to a new status; append to status history; create any
+    auto-tasks defined for the destination status (unless skip_auto_tasks)."""
     if to_status not in STATUS_LABEL:
         raise ValueError(f"Unknown status: {to_status!r}")
     existing = get_job(job_id)
@@ -217,7 +261,46 @@ def transition_status(job_id: int, *, to_status: str,
             f"WHERE id = :id",
             {"s": to_status, "now": now, "id": job_id},
         )
+
+    # Auto-create the tasks defined for this new status (after the status
+    # itself is committed so subsequent reads see the new state).
+    if not skip_auto_tasks:
+        _seed_auto_tasks(job_id, to_status)
+
     return get_job(job_id)  # type: ignore[return-value]
+
+
+def _seed_auto_tasks(job_id: int, status_key: str) -> int:
+    """Create auto-tasks for this status; skip any already present + open."""
+    specs = STATUS_AUTO_TASKS.get(status_key) or []
+    if not specs:
+        return 0
+
+    # Pull current open tasks so we don't double-create on re-transition.
+    open_descs = {
+        (t["description"] or "").strip()
+        for t in list_tasks(job_id, include_completed=False)
+    }
+
+    created = 0
+    today = date.today()
+    for spec in specs:
+        desc = f"{AUTO_PREFIX}{spec['description']}"
+        if desc in open_descs:
+            continue
+        due = (today + _days_offset(spec.get("due_in_days") or 0)).isoformat()
+        try:
+            add_task(job_id, description=desc, due_at=due, assigned_to=None)
+            created += 1
+        except (ValueError, LookupError):
+            pass
+    return created
+
+
+def _days_offset(n: int):
+    """timedelta(n) — wrapped so the import lives in one place."""
+    from datetime import timedelta
+    return timedelta(days=int(n))
 
 
 def list_status_history(job_id: int) -> list[dict]:
