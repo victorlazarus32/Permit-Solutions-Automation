@@ -1668,6 +1668,13 @@ def job_detail(job_id: int):
     if not j:
         flash("Job not found.", "error")
         return redirect(url_for("jobs_list"))
+    # If a closing invoice is linked to this job (Phase 3), surface it.
+    linked_invoice = None
+    if j.get("invoice_id"):
+        try:
+            linked_invoice = inv_mod.get_invoice(j["invoice_id"])
+        except Exception:
+            linked_invoice = None
     return render_template(
         "job_detail.html",
         job=j,
@@ -1675,6 +1682,7 @@ def job_detail(job_id: int):
         history=jobs_mod.list_status_history(job_id),
         statuses=jobs_mod.STATUSES,
         status_label=jobs_mod.STATUS_LABEL,
+        linked_invoice=linked_invoice,
     )
 
 
@@ -1696,10 +1704,19 @@ def job_transition_status(job_id: int):
 
     label = jobs_mod.STATUS_LABEL.get(to_status, to_status)
     auto_count = 0 if skip_auto else len(jobs_mod.STATUS_AUTO_TASKS.get(to_status, []))
+    extra = ""
+    # Phase 3 auto-invoice: if the transition created a closing invoice,
+    # surface its number in the flash so the user can jump to it.
+    if not skip_auto and to_status == "approved" and j.get("invoice_id"):
+        try:
+            inv = inv_mod.get_invoice(j["invoice_id"])
+            extra = f" Draft closing invoice {inv['invoice_number']} created — fill in the final amount before sending."
+        except Exception:
+            pass
     if auto_count:
-        flash(f"Job {j['job_number']} moved to {label} — {auto_count} follow-up task(s) added automatically.", "success")
+        flash(f"Job {j['job_number']} moved to {label} — {auto_count} follow-up task(s) added automatically.{extra}", "success")
     else:
-        flash(f"Job {j['job_number']} moved to {label}.", "success")
+        flash(f"Job {j['job_number']} moved to {label}.{extra}", "success")
     return redirect(url_for("job_detail", job_id=job_id))
 
 

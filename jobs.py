@@ -84,7 +84,10 @@ STATUS_AUTO_TASKS: dict[str, list[dict]] = {
     ],
     "approved": [
         {"description": "Send close-out package to client",               "due_in_days": 2},
-        {"description": "Generate closing invoice for final payment",     "due_in_days": 1},
+        # NB: 'Generate closing invoice' used to live here as a manual task.
+        # Phase 3 auto-creates a draft invoice instead — see
+        # _auto_create_closing_invoice() called from transition_status().
+        {"description": "Review + finalize the auto-created closing invoice", "due_in_days": 1},
     ],
     "closed_won": [
         {"description": "Email client thank-you + ask for Google review", "due_in_days": 1},
@@ -282,8 +285,61 @@ def transition_status(job_id: int, *, to_status: str,
     # itself is committed so subsequent reads see the new state).
     if not skip_auto_tasks:
         _seed_auto_tasks(job_id, to_status)
+        # Phase 3: when a job is approved, draft the closing invoice
+        # automatically (unless the job already has one linked).
+        if to_status == "approved":
+            _auto_create_closing_invoice(job_id)
 
     return get_job(job_id)  # type: ignore[return-value]
+
+
+def _auto_create_closing_invoice(job_id: int) -> dict | None:
+    """
+    Create a draft 'closing' invoice prefilled from this job. Links the new
+    invoice back to the job via jobs.invoice_id. Skips silently if the job
+    already has an invoice linked.
+    """
+    job = get_job(job_id)
+    if not job or job.get("invoice_id"):
+        return None
+
+    # Lazy imports — avoid pulling the invoice module into module-load path
+    import invoices as inv_mod  # noqa: WPS433 (local import is intentional)
+
+    # Parse property address into parts (street / city / state / zip) so
+    # the printed invoice formats cleanly.
+    parts = inv_mod._parse_address(job.get("property_address"))
+
+    try:
+        inv = inv_mod.create_invoice(
+            client_name=job["client_name"],
+            client_phone=job.get("client_phone"),
+            client_email=job.get("client_email"),
+            # Property address (full one-line value goes to the address field;
+            # parsed parts go to city/state/zip).
+            property_address=parts["street"] or job.get("property_address"),
+            property_city=parts["city"],
+            property_state=parts["state"],
+            property_zip=parts["zip"],
+            # Carry the violation linkage if there is one.
+            source=job.get("source"),
+            case_number=job.get("case_number"),
+            # Placeholder line item — user fills in actual final-payment
+            # amount before sending. create_invoice() requires >= 1 item.
+            line_items=[{
+                "description": f"Closing payment — {job['job_number']}",
+                "quantity":    1,
+                "unit_price":  0,
+            }],
+            notes=f"Auto-created on approval of {job['job_number']}. "
+                  f"Fill in the final-payment amount before sending.",
+        )
+    except Exception:
+        return None
+
+    # Link invoice back to the job
+    update_job(job_id, invoice_id=inv["id"])
+    return inv
 
 
 def _seed_auto_tasks(job_id: int, status_key: str) -> int:

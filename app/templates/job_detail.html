@@ -152,6 +152,22 @@
     </div>
     {% endif %}
 
+    {% if linked_invoice %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Closing Invoice</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Number</span><span class="v mono"><a href="{{ url_for('invoice_detail', invoice_id=linked_invoice.id) }}">{{ linked_invoice.invoice_number }}</a></span></div>
+        <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ linked_invoice.status }}">{{ 'ESTIMATE' if linked_invoice.status == 'draft' else linked_invoice.status|upper }}</span></span></div>
+        <div class="kv"><span class="k">Total</span><span class="v">${{ '{:,.2f}'.format(linked_invoice.total) }}</span></div>
+      </div>
+      {% if linked_invoice.status == 'draft' and linked_invoice.total == 0 %}
+      <p style="font-size: 0.82rem; color: var(--ink-mute); margin-top: 8px;">
+        Auto-created on approval. Fill in the final-payment amount before sending.
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Status history -->
     <div class="lead-card">
       <h3 class="lead-card-title">Status History</h3>
