@@ -215,8 +215,21 @@
     text-transform: uppercase;
     color: #6b7280;
     display: block;
-    margin-bottom: 3pt;
+    margin-bottom: 4pt;
   }
+
+  /* 2-column layout for Terms + Payment so a short 'Due on receipt'
+     doesn't leave half the row empty. If only one is present it
+     fills the row via flex auto-fit. */
+  .terms-block .terms-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18pt;
+    align-items: flex-start;
+  }
+  .terms-block .terms-col       { flex: 1 1 120pt; min-width: 0; }
+  .terms-block .terms-col-wide  { flex: 2 1 240pt; }
+  .terms-block .terms-col > div { line-height: 1.5; }
 
   /* ===== Footer ===== */
   .footer {
@@ -387,14 +400,20 @@
 
   {% if terms or payment_instructions %}
   <div class="terms-block">
-    {% if terms %}
-    <span class="tb-label">Terms</span>
-    <div>{{ terms }}</div>
-    {% endif %}
-    {% if payment_instructions %}
-    <span class="tb-label" style="margin-top: 6pt;">Payment</span>
-    <div>{{ payment_instructions }}</div>
-    {% endif %}
+    <div class="terms-grid">
+      {% if terms %}
+      <div class="terms-col">
+        <span class="tb-label">Terms</span>
+        <div>{{ terms }}</div>
+      </div>
+      {% endif %}
+      {% if payment_instructions %}
+      <div class="terms-col terms-col-wide">
+        <span class="tb-label">Payment</span>
+        <div>{{ payment_instructions }}</div>
+      </div>
+      {% endif %}
+    </div>
   </div>
   {% endif %}
 
