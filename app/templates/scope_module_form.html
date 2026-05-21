@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{% if module %}Edit {{ module.name }}{% else %}New Scope Module{% endif %}{% endblock %}
+
+{% block content %}
+{% set is_edit = module is not none %}
+
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb">
+        <a href="{{ url_for('scope_modules_list') }}">Scope Modules</a> ·
+        {% if is_edit %}{{ module.name }} · Edit{% else %}New{% endif %}
+      </p>
+      <h1>{% if is_edit %}Edit Scope Module{% else %}New Scope Module{% endif %}</h1>
+    </div>
+  </div>
+</section>
+
+<form method="POST" class="lead-card" style="max-width: 820px;">
+
+  <div class="form-row">
+    <div class="form-field">
+      <label for="name">Display name <span style="color: var(--red);">*</span></label>
+      <input type="text" name="name" id="name" required maxlength="120"
+             placeholder="e.g. Compliance Review"
+             value="{{ module.name if is_edit else '' }}">
+    </div>
+    <div class="form-field" style="max-width: 180px;">
+      <label for="sort_order">Order</label>
+      <input type="number" name="sort_order" id="sort_order" min="0" step="10"
+             value="{{ module.sort_order if is_edit else 100 }}">
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-field">
+      <label for="key">Key (machine slug)</label>
+      <input type="text" name="key" id="key"
+             {% if is_edit %}readonly{% endif %}
+             pattern="[a-z][a-z0-9_]*" maxlength="60"
+             placeholder="compliance_review"
+             value="{{ module.key if is_edit else '' }}">
+    </div>
+    <div class="form-field">
+      <label for="category">Category</label>
+      <input type="text" name="category" id="category" maxlength="60"
+             placeholder="general / fence / permit"
+             value="{{ module.category if is_edit and module.category else '' }}">
+    </div>
+  </div>
+
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="body">Module body</label>
+      <textarea name="body" id="body" rows="10"
+                placeholder="The reusable text for this module. Use {{ '{{jurisdiction}}' }} or {{ '{{fence_type}}' }} for variables that get filled in at invoice time.">{{ module.body if is_edit else '' }}</textarea>
+      <p style="font-size: 0.85rem; color: var(--ink-mute); margin: 6px 0 0;">
+        Available variables on the invoice form:
+        <span class="mono">{{ '{{jurisdiction}}' }}</span>,
+        <span class="mono">{{ '{{service_type}}' }}</span>,
+        <span class="mono">{{ '{{subtype}}' }}</span>,
+        <span class="mono">{{ '{{subject}}' }}</span>,
+        <span class="mono">{{ '{{permit_type}}' }}</span>.
+      </p>
+    </div>
+  </div>
+
+  <div class="form-actions" style="margin-top: 1.25rem; display: flex; gap: 0.75rem;">
+    <button type="submit" class="btn-primary">{% if is_edit %}Save Changes{% else %}Create Module{% endif %}</button>
+    <a href="{{ url_for('scope_modules_list') }}" class="btn-secondary">Cancel</a>
+  </div>
+</form>
+
+<style>
+  textarea#body {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    resize: vertical;
+  }
+</style>
+{% endblock %}

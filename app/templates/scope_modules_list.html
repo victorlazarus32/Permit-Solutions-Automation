@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Scope Modules{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <h1>Scope of Services Modules</h1>
+      <p class="hero-sub">
+        Reusable text blocks that assemble into the "Scope of Services" section on invoices.
+        Use <span class="mono">{{ '{{jurisdiction}}' }}</span>, <span class="mono">{{ '{{fence_type}}' }}</span>, etc. for variables.
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      {% if count == 0 %}
+      <form method="POST" action="{{ url_for('scope_modules_seed') }}">
+        <button type="submit" class="btn-secondary">Load Default Modules</button>
+      </form>
+      {% endif %}
+      <a class="btn-primary" href="{{ url_for('scope_module_new') }}">+ New Module</a>
+    </div>
+  </div>
+</section>
+
+{% if modules %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th style="width: 4em;">Order</th>
+      <th>Name</th>
+      <th>Key</th>
+      <th>Category</th>
+      <th>Preview</th>
+      <th class="col-actions">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in modules %}
+    <tr>
+      <td>{{ m.sort_order }}</td>
+      <td><strong>{{ m.name }}</strong></td>
+      <td class="mono" style="font-size: 0.85rem;">{{ m.key }}</td>
+      <td>{% if m.category %}<span class="kw-chip">{{ m.category }}</span>{% else %}—{% endif %}</td>
+      <td class="cell-narrative">{{ (m.body or '')[:140] }}{% if m.body and m.body|length > 140 %}…{% endif %}</td>
+      <td class="col-actions" style="white-space: nowrap;">
+        <a class="btn-secondary btn-tiny" href="{{ url_for('scope_module_edit', module_id=m.id) }}">Edit</a>
+        <form method="POST" action="{{ url_for('scope_module_delete', module_id=m.id) }}"
+              style="display: inline;"
+              onsubmit="return confirm('Delete module \&quot;{{ m.name }}\&quot;? Invoices that referenced it will lose their generated text but already-saved scope_of_services on those invoices is preserved.');">
+          <button type="submit" class="btn-tiny" style="color: var(--red); background: none; border: none; cursor: pointer;">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">
+  No scope modules yet. Click <strong>Load Default Modules</strong> above to seed
+  the standard 6 (Compliance Review, Permit Preparation, Engineering Coordination,
+  Permit Processing, Inspection Coordination, Exclusions) — or click <strong>+ New Module</strong>
+  to build your own from scratch.
+</p>
+{% endif %}
+{% endblock %}

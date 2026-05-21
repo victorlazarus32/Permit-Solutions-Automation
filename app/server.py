@@ -1039,6 +1039,7 @@ def action_log_event():
 import invoices as inv_mod  # noqa: E402
 import contracts as contracts_mod  # noqa: E402
 import reports as reports_mod  # noqa: E402
+import scope_modules as scope_mod  # noqa: E402
 
 
 def _parse_line_items_from_form(form) -> list[dict]:
@@ -1129,6 +1130,7 @@ def _render_invoice_pdf(inv: dict) -> bytes:
         amount_paid=float(inv["amount_paid"]),
         balance_due=float(inv.get("balance_due", 0)),
         deposit_amount=float(inv.get("deposit_amount") or 0),
+        scope_of_services=inv.get("scope_of_services") or "",
         issued_display=issued_display,
         due_display=due_display,
         terms=inv.get("terms"),
@@ -1208,6 +1210,7 @@ def invoice_new():
                 line_items=line_items,
                 tax_rate=tax_rate,
                 deposit_amount=_parse_money(f.get("deposit_amount")),
+                scope_of_services=_fs(f, "scope_of_services"),
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms") or "Due on receipt",
                 notes=_fs(f, "notes"),
@@ -1235,6 +1238,7 @@ def invoice_new():
         today_iso=dt.date.today().isoformat(),
         contracts_available=contracts_mod.list_contracts(),
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
+        scope_modules_available=scope_mod.list_modules(),
     )
 
 
@@ -1294,6 +1298,7 @@ def invoice_edit(invoice_id: int):
                 line_items=line_items,
                 tax_rate=tax_rate,
                 deposit_amount=_parse_money(f.get("deposit_amount")),
+                scope_of_services=_fs(f, "scope_of_services"),
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms"),
                 notes=_fs(f, "notes"),
@@ -1313,6 +1318,7 @@ def invoice_edit(invoice_id: int):
         today_iso=dt.date.today().isoformat(),
         contracts_available=contracts_mod.list_contracts(),
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
+        scope_modules_available=scope_mod.list_modules(),
     )
 
 
@@ -1439,6 +1445,88 @@ def contract_delete(contract_id: int):
         contracts_mod.delete_contract(contract_id)
         flash(f"Contract \"{c['name']}\" deleted.", "success")
     return redirect(url_for("contracts_list"))
+
+
+# ---------- Scope Modules (Scope of Services Generator) ----------
+
+@app.route("/scope-modules")
+def scope_modules_list():
+    items = scope_mod.list_modules()
+    return render_template("scope_modules_list.html",
+                           modules=items, count=len(items))
+
+
+@app.route("/scope-modules/new", methods=["GET", "POST"])
+def scope_module_new():
+    if request.method == "POST":
+        f = request.form
+        try:
+            m = scope_mod.create_module(
+                key=(f.get("key") or "").strip(),
+                name=(f.get("name") or "").strip(),
+                body=_fs(f, "body"),
+                category=_fs(f, "category"),
+                sort_order=_fi(f, "sort_order") or 100,
+            )
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(request.url)
+        flash(f"Module \"{m['name']}\" saved.", "success")
+        return redirect(url_for("scope_modules_list"))
+    return render_template("scope_module_form.html", module=None)
+
+
+@app.route("/scope-modules/<int:module_id>/edit", methods=["GET", "POST"])
+def scope_module_edit(module_id: int):
+    m = scope_mod.get_module(module_id)
+    if not m:
+        flash("Module not found.", "error")
+        return redirect(url_for("scope_modules_list"))
+    if request.method == "POST":
+        f = request.form
+        try:
+            m = scope_mod.update_module(
+                module_id,
+                name=(f.get("name") or "").strip(),
+                body=_fs(f, "body"),
+                category=_fs(f, "category"),
+                sort_order=_fi(f, "sort_order") or 100,
+            )
+        except (ValueError, LookupError) as e:
+            flash(str(e), "error")
+            return redirect(request.url)
+        flash(f"Module \"{m['name']}\" updated.", "success")
+        return redirect(url_for("scope_modules_list"))
+    return render_template("scope_module_form.html", module=m)
+
+
+@app.post("/scope-modules/<int:module_id>/delete")
+def scope_module_delete(module_id: int):
+    m = scope_mod.get_module(module_id)
+    if not m:
+        flash("Module not found.", "error")
+    else:
+        scope_mod.delete_module(module_id)
+        flash(f"Module \"{m['name']}\" deleted.", "success")
+    return redirect(url_for("scope_modules_list"))
+
+
+@app.post("/scope-modules/seed")
+def scope_modules_seed():
+    """Insert the standard module set from the spec. Skips ones that already exist."""
+    n = scope_mod.seed_defaults(force=False)
+    flash(f"Seeded {n} default module(s).", "success" if n else "info")
+    return redirect(url_for("scope_modules_list"))
+
+
+@app.post("/api/scope-modules/assemble")
+def api_scope_assemble():
+    """Live preview: assemble selected modules + variables, return joined text."""
+    data = request.get_json(silent=True) or {}
+    keys = data.get("keys") or []
+    variables = data.get("variables") or {}
+    text = scope_mod.assemble(keys, variables=variables)
+    return jsonify({"text": text})
 
 
 @app.route("/reports")

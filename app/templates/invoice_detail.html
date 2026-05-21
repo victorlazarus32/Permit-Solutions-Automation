@@ -53,6 +53,13 @@
     </div>
     {% endif %}
 
+    {% if inv.scope_of_services %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Scope of Services</h3>
+      <div style="white-space: pre-wrap; font-size: 0.93rem; line-height: 1.55;">{{ inv.scope_of_services }}</div>
+    </div>
+    {% endif %}
+
     {% if attached_contract %}
     <div class="lead-card">
       <h3 class="lead-card-title">Contract: {{ attached_contract.name }}</h3>

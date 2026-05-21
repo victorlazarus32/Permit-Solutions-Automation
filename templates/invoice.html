@@ -378,6 +378,13 @@
     </table>
   </div>
 
+  {% if scope_of_services %}
+  <div class="terms-block" style="page-break-inside: avoid;">
+    <span class="tb-label">Scope of Services</span>
+    <div style="white-space: pre-wrap;">{{ scope_of_services }}</div>
+  </div>
+  {% endif %}
+
   {% if terms or payment_instructions %}
   <div class="terms-block">
     {% if terms %}

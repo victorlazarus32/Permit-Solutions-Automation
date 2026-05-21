@@ -213,11 +213,142 @@
     </div>
   </div>
 
+  <!-- ===== Scope of Services Generator =====
+       Picks variables + modules, calls /api/scope-modules/assemble for a
+       preview, drops result into the textarea. User can hand-edit before save. -->
+  <h3 class="lead-card-title" style="margin-top: 1.5rem;">Scope of Services</h3>
+
+  <div class="form-row">
+    <div class="form-field">
+      <label for="scope_service_type">Service Type</label>
+      <select id="scope_service_type">
+        <option value="">— Choose —</option>
+        <option>Fence Violation Resolution</option>
+        <option>After-The-Fact Permit</option>
+        <option>Permit Expediting</option>
+        <option>Code Violation Compliance</option>
+        <option>Engineering Coordination</option>
+        <option>Municipal Permit Processing</option>
+        <option>Inspection Coordination</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="scope_subtype">Subtype</label>
+      <select id="scope_subtype">
+        <option value="">— Choose —</option>
+        <option>Aluminum Fence</option>
+        <option>Wood Fence</option>
+        <option>Chain Link Fence</option>
+        <option>Pergola</option>
+        <option>Shed</option>
+        <option>Driveway</option>
+        <option>Windows/Doors</option>
+        <option>Electrical</option>
+        <option>Mini-Split</option>
+        <option>Pool Barrier</option>
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="scope_jurisdiction">Jurisdiction</label>
+      <select id="scope_jurisdiction">
+        <option value="">— Choose —</option>
+        <option>Miami-Dade County</option>
+        <option>City of Homestead</option>
+        <option>City of Miami</option>
+        <option>City of Miami Beach</option>
+        <option>City of Coral Gables</option>
+        <option>City of Doral</option>
+        <option>City of Hialeah</option>
+        <option>Palmetto Bay</option>
+        <option>Cutler Bay</option>
+        <option>Pinecrest</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-row single">
+    <div class="form-field">
+      <label>Modules to include (check the ones you want)</label>
+      <div id="scope_modules_picker" style="display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; max-height: 240px; overflow-y: auto;">
+        {% if scope_modules_available %}
+          {% for m in scope_modules_available %}
+            <label style="display: flex; gap: 8px; align-items: flex-start; font-size: 0.93rem;">
+              <input type="checkbox" class="scope-module-cb" value="{{ m.key }}" style="margin-top: 3px;">
+              <span><strong>{{ m.name }}</strong>{% if m.category %} <span class="kw-chip" style="font-size: 0.7rem;">{{ m.category }}</span>{% endif %}<br>
+              <span style="color: var(--ink-mute); font-size: 0.85rem;">{{ (m.body or '')[:120] }}{% if m.body and m.body|length > 120 %}…{% endif %}</span></span>
+            </label>
+          {% endfor %}
+        {% else %}
+          <span style="color: var(--ink-mute);">No scope modules saved yet. <a href="{{ url_for('scope_modules_list') }}">Create some</a> in Settings.</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row single">
+    <button type="button" id="scope_generate" class="btn-secondary"
+            style="align-self: flex-start;">Generate Preview ↓</button>
+  </div>
+
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="scope_of_services">Scope of Services (assembled — you can edit before saving)</label>
+      <textarea name="scope_of_services" id="scope_of_services" rows="10"
+                placeholder="Click Generate Preview above to assemble from selected modules, or type your own scope.">{{ invoice.scope_of_services if is_edit and invoice.scope_of_services else '' }}</textarea>
+    </div>
+  </div>
+
   <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
     <button type="submit" class="btn-primary">{% if is_edit %}Save changes{% else %}Create draft{% endif %}</button>
     <a href="{% if is_edit %}{{ url_for('invoice_detail', invoice_id=invoice.id) }}{% else %}{{ url_for('invoices_list') }}{% endif %}" class="btn-secondary">Cancel</a>
   </div>
 </form>
+
+<script>
+(function() {
+  // Live-assemble scope text from selected modules + variables
+  var btn = document.getElementById('scope_generate');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var keys = Array.from(document.querySelectorAll('.scope-module-cb:checked'))
+                    .map(function(cb) { return cb.value; });
+    if (keys.length === 0) {
+      alert('Pick at least one module above first.');
+      return;
+    }
+    var variables = {
+      service_type: document.getElementById('scope_service_type').value,
+      subtype:      document.getElementById('scope_subtype').value,
+      jurisdiction: document.getElementById('scope_jurisdiction').value,
+      subject:      document.getElementById('scope_subtype').value,   // alias
+    };
+    btn.textContent = 'Generating…';
+    btn.disabled = true;
+    fetch('/api/scope-modules/assemble', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: keys, variables: variables }),
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var ta = document.getElementById('scope_of_services');
+        var existing = (ta.value || '').trim();
+        var generated = (data.text || '').trim();
+        if (existing && !confirm('The Scope of Services field has text in it. Replace it with the generated scope?')) {
+          btn.textContent = 'Generate Preview ↓';
+          btn.disabled = false;
+          return;
+        }
+        ta.value = generated;
+      })
+      .catch(function(err) { alert('Error generating scope: ' + err); })
+      .finally(function() {
+        btn.textContent = 'Generate Preview ↓';
+        btn.disabled = false;
+      });
+  });
+})();
+</script>
 
 <style>
   table.line-items { width: 100%; border-collapse: collapse; }

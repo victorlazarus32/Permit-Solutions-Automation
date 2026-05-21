@@ -253,6 +253,22 @@ CREATE TABLE IF NOT EXISTS contracts (
 );
 
 CREATE INDEX IF NOT EXISTS ix_contracts_name ON contracts(name);
+
+-- Reusable scope-of-services module blocks. Stored modularly so an invoice's
+-- "Scope of Services" section is assembled from selected modules with
+-- per-job variable substitution ({{jurisdiction}}, {{fence_type}}, etc.).
+CREATE TABLE IF NOT EXISTS scope_modules (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    key          TEXT NOT NULL UNIQUE,    -- machine slug, e.g. 'compliance_review'
+    name         TEXT NOT NULL,           -- human label, e.g. 'Compliance Review'
+    body         TEXT,                    -- the actual text, may contain {{vars}}
+    category     TEXT,                    -- 'fence', 'permit', 'general', etc.
+    sort_order   INTEGER NOT NULL DEFAULT 100,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_scope_modules_category ON scope_modules(category, sort_order);
 """
 
 
@@ -305,6 +321,7 @@ def _migrate_invoices(conn) -> None:
         ("property_zip",   "TEXT"),
         ("contract_id",    "INTEGER"),                    # FK -> contracts.id, nullable
         ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
+        ("scope_of_services", "TEXT"),                    # assembled scope text for this invoice
     ]
     for col, ddl in additions:
         if col not in existing:
