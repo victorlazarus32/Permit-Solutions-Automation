@@ -745,6 +745,90 @@ def api_search():
     return jsonify({"results": _quick_search(q, limit=12)})
 
 
+# ---- External lookup orchestrator (Tyler API + Property Appraiser) ----
+#
+# Pattern-detects the query and fires the right one or two calls in parallel.
+# Returns at most a handful of off-system candidates with a "prefill_url" the
+# UI can use as a direct link to "Create invoice with this".
+
+import re as _re_search
+
+_TYLER_CASE_RE = _re_search.compile(r"^CC-\d{2}-\d{5}-NOV$", _re_search.IGNORECASE)
+_FOLIO_RE      = _re_search.compile(r"^\d{13}$")
+_FOLIO_FMT_RE  = _re_search.compile(r"^\d{2}-\d{4}-\d{3}-\d{4}$")  # 01-4137-023-0020
+_ADDRESS_RE    = _re_search.compile(r"^\d+\s+\w")                    # 11769 SW...
+
+
+def _classify_query(q: str) -> str:
+    """Decide which external source(s) make sense for this query."""
+    s = q.strip()
+    if not s:
+        return "none"
+    if _TYLER_CASE_RE.match(s):
+        return "tyler_case"
+    if _FOLIO_RE.match(s) or _FOLIO_FMT_RE.match(s):
+        return "pa_folio"
+    if _ADDRESS_RE.match(s):
+        return "address"
+    return "none"
+
+
+@app.get("/api/lookup-external")
+def api_lookup_external():
+    """Live cross-reference against Tyler API + Miami-Dade Property Appraiser."""
+    q = request.args.get("q", "").strip()
+    kind = _classify_query(q)
+    results: list[dict] = []
+
+    if kind == "tyler_case":
+        # Lazy import to keep app boot fast
+        from connectors.tyler_energov import lookup_case as _tyler_lookup
+        row = _tyler_lookup(q)
+        if row:
+            results.append({
+                "source":          "tyler",
+                "label":           "City of Homestead (Tyler)",
+                "case_number":     row.get("CaseNumber") or "",
+                "property_address": row.get("AddressDisplay") or "",
+                "owner_full_name": "",  # Tyler doesn't return owner
+                "violation":       (row.get("Description") or "")[:160],
+                "prefill_url":     url_for("invoice_new") + f"?case=homestead|{row.get('CaseNumber','')}",
+            })
+
+    elif kind == "pa_folio":
+        from lookup.property_appraiser import lookup as _pa_lookup
+        folio = q.replace("-", "")
+        try:
+            info = _pa_lookup(folio)
+            if info.found():
+                results.append({
+                    "source":          "pa",
+                    "label":           "Miami-Dade Property Appraiser",
+                    "folio":           info.folio,
+                    "owner_full_name": info.owner_full_name,
+                    "owner_mailing_address": info.owner_mailing_address,
+                    "site_address":    info.site_address,
+                    "prefill_url":     url_for("invoice_new") + f"?pa_folio={info.folio}",
+                })
+        except Exception:
+            pass
+
+    elif kind == "address":
+        from lookup.property_appraiser import search_by_address as _pa_search
+        for r in _pa_search(q, limit=6):
+            results.append({
+                "source":          "pa",
+                "label":           f"Miami-Dade PA ({r.get('municipality') or '—'})",
+                "folio":           r["folio"],
+                "owner_full_name": r["owner_full_name"],
+                "site_address":    r["site_address"],
+                "municipality":    r["municipality"],
+                "prefill_url":     url_for("invoice_new") + f"?pa_folio={r['folio']}",
+            })
+
+    return jsonify({"q": q, "kind": kind, "results": results})
+
+
 @app.route("/pipeline")
 def pipeline():
     intakes = _list_intakes(limit=200)
@@ -1237,15 +1321,41 @@ def invoice_new():
         flash(f"Created draft invoice {inv['invoice_number']}.", "success")
         return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
 
-    # GET: render the form (optionally prefilled from a case)
+    # GET: render the form (optionally prefilled from a case OR a PA folio)
     prefill = {}
     case_key = request.args.get("case")
+    pa_folio = (request.args.get("pa_folio") or "").strip()
     if case_key and "|" in case_key:
         src, case = case_key.split("|", 1)
         try:
             prefill = inv_mod.prefill_from_case(src, case)
         except LookupError as e:
             flash(str(e), "error")
+    elif pa_folio:
+        # Cross-reference straight from PA. Parse the returned mailing /
+        # site addresses so client + property city/state/zip auto-populate.
+        from lookup.property_appraiser import lookup as _pa_lookup
+        from invoices import _parse_address as _parse_addr
+        try:
+            info = _pa_lookup(pa_folio)
+            if info.found():
+                mail = _parse_addr(info.owner_mailing_address)
+                site = _parse_addr(info.site_address)
+                prefill = {
+                    "client_name":      info.owner_full_name,
+                    "client_address":   mail["street"] or info.owner_mailing_address,
+                    "client_city":      mail["city"],
+                    "client_state":     mail["state"],
+                    "client_zip":       mail["zip"],
+                    "property_address": site["street"] or info.site_address,
+                    "property_city":    site["city"],
+                    "property_state":   site["state"],
+                    "property_zip":     site["zip"],
+                }
+            else:
+                flash(f"No Property Appraiser record for folio {pa_folio}.", "warning")
+        except Exception as e:
+            flash(f"PA lookup failed for folio {pa_folio}: {e}", "error")
     return render_template(
         "invoice_form.html",
         prefill=prefill,

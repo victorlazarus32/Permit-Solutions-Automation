@@ -493,6 +493,42 @@ def _enrich_owners_for(source: str, *, log: logging.Logger) -> int:
     return enriched
 
 
+def lookup_case(case_number: str, *, tenant_key: str = "homestead") -> dict | None:
+    """
+    Search Tyler's catalog for a single case by case number.
+    Returns the raw row dict if found, None otherwise.
+
+    Used by the universal search bar for on-the-fly case lookups (cases
+    that aren't in our local DB yet). Designed to be fast and safe — short
+    timeout, swallows transport errors, returns None instead of raising.
+    """
+    case_number = (case_number or "").strip().upper()
+    if not case_number:
+        return None
+    t = TYLER_TENANTS.get(tenant_key)
+    if not t:
+        return None
+
+    body = _build_body(t, page_number=1)
+    body["Keyword"] = case_number
+    body["ExactMatch"] = True
+    body.get("CodeCaseCriteria", {}).pop("CodeCaseTypeId", None)  # widen the search
+
+    try:
+        with requests.Session() as session:
+            r = session.post(_endpoint(t), json=body, headers=_headers(t),
+                             timeout=8)
+            r.raise_for_status()
+            d = r.json()
+    except (requests.RequestException, ValueError):
+        return None
+
+    for row in (d.get("Result", {}).get("EntityResults") or []):
+        if (row.get("CaseNumber") or "").upper() == case_number:
+            return row
+    return None
+
+
 def _cli() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("source", choices=sorted(TYLER_TENANTS))

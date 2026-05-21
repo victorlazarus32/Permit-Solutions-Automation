@@ -183,6 +183,68 @@ def batch_lookup(folios, *, sleep_sec: float = PER_LOOKUP_SLEEP):
                 time.sleep(sleep_sec)
 
 
+def search_by_address(query: str, limit: int = 8) -> list[dict]:
+    """
+    Quick partial-address search against the PA. Returns up to `limit`
+    candidate properties as dicts with normalized fields. Designed for the
+    universal search dropdown — short timeout, never raises (returns []
+    on any failure).
+
+    Each result dict:
+        {folio, owner_full_name, site_address, municipality, neighborhood}
+
+    `query` is interpreted as best-effort: leading digits become the
+    streetnumber param, the rest becomes streetname. Empty or too-short
+    queries return [] without calling the API.
+    """
+    q = (query or "").strip()
+    if len(q) < 4:
+        return []
+
+    # Split "11769 SW 222ND ST" -> streetnumber="11769", streetname="SW 222ND ST"
+    parts = q.split(maxsplit=1)
+    if not parts:
+        return []
+    streetnumber = ""
+    streetname = q
+    if parts[0].isdigit():
+        streetnumber = parts[0]
+        streetname = parts[1] if len(parts) > 1 else ""
+
+    try:
+        r = requests.get(
+            ENDPOINT,
+            params={
+                "Operation":      "GetPropertySearchByAddress",
+                "streetnumber":   streetnumber,
+                "streetname":     streetname,
+                "clientAppName":  CLIENT_APP,
+            },
+            headers={"accept": "application/json", "user-agent": USER_AGENT},
+            timeout=8,
+        )
+        r.raise_for_status()
+        data = r.json()
+    except (requests.RequestException, ValueError) as e:
+        log.warning("PA address search failed for %r: %s", query, e)
+        return []
+
+    out: list[dict] = []
+    for info in (data.get("MinimumPropertyInfos") or [])[:limit]:
+        owner = " ".join(p for p in (info.get("Owner1"), info.get("Owner2"),
+                                     info.get("Owner3")) if (p or "").strip())
+        strap = (info.get("Strap") or "").replace("-", "")
+        out.append({
+            "folio":           strap,
+            "owner_full_name": owner.strip(),
+            "site_address":    (info.get("SiteAddress") or "").strip(),
+            "site_unit":       (info.get("SiteUnit") or "").strip(),
+            "municipality":    (info.get("Municipality") or "").strip(),
+            "neighborhood":    (info.get("NeighborhoodDescription") or "").strip(),
+        })
+    return out
+
+
 if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO,

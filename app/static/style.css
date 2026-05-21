@@ -1000,6 +1000,26 @@ details[open] .intake-section-title::after { content: "−"; background: var(--i
 .qs-line2 { font-size: 11.5px; color: var(--ink-mute); }
 .qs-empty { padding: 18px; text-align: center; color: var(--ink-mute); font-size: 13px; }
 
+/* Section header inside the quick-search dropdown separating local hits
+   from off-system cross-reference results. */
+.qs-section-hdr {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding: 10px 14px 6px;
+  border-top: 1px solid var(--border);
+  background: rgba(240, 138, 36, 0.04);
+}
+.qs-item-ext .qs-mark { color: var(--orange, #f08a24); font-weight: 700; }
+.qs-item-ext .qs-src {
+  font-size: 0.72rem;
+  color: var(--ink-mute);
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /* ===== Toast notifications ===== */
 .toast-stack {
   position: fixed;

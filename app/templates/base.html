@@ -143,7 +143,12 @@
   });
 })();
 
-/* ===== Universal quick search ===== */
+/* ===== Universal quick search =====
+   Local DB hits show instantly. In parallel, an external-lookup call
+   (Tyler API + Property Appraiser) fires only when the query looks like
+   a case#, folio, or address. External results are appended below local
+   ones when they arrive. AbortController + a small in-memory cache
+   keep things snappy. */
 (function() {
   var input = document.getElementById('quick-search-input');
   var box   = document.getElementById('qs-results');
@@ -152,39 +157,88 @@
   var debounceTimer = null;
   var current = -1;
   var items = [];
+  var inFlight = null;
+  var cache = new Map();              // q -> {local, external}
+  var lastQ  = null;
 
-  function fetchResults(q) {
-    return fetch('/api/search?q=' + encodeURIComponent(q))
+  function fetchLocal(q, signal) {
+    return fetch('/api/search?q=' + encodeURIComponent(q), { signal: signal })
       .then(function(r) { return r.json(); })
       .then(function(j) { return j.results || []; });
   }
+  function fetchExternal(q, signal) {
+    // Server side decides whether to actually call out (case-format check).
+    return fetch('/api/lookup-external?q=' + encodeURIComponent(q), { signal: signal })
+      .then(function(r) { return r.json(); })
+      .then(function(j) { return j.results || []; })
+      .catch(function() { return []; });   // never block local results
+  }
 
-  function render(results) {
-    items = results;
-    if (!results.length) {
+  function renderRow_local(r, i) {
+    return '<a class="qs-item" href="/lead/' + r.source + '/' + r.case_number + '" data-i="' + i + '">' +
+      '<span class="qs-mark">' + (r.is_mailed ? '●' : '○') + '</span>' +
+      '<span class="qs-line1"><span class="mono">' + r.case_number + '</span> ' +
+      (r.property_address ? '· ' + r.property_address : '') + '</span>' +
+      '<span class="qs-line2">' + (r.owner_full_name || '—') + '</span>' +
+      '</a>';
+  }
+  function renderRow_external(r, i) {
+    var line1 = r.case_number ? '<span class="mono">' + r.case_number + '</span> · ' : '';
+    line1 += (r.property_address || r.site_address || '');
+    var line2 = (r.owner_full_name || '—') + (r.folio ? ' · folio ' + r.folio : '');
+    return '<a class="qs-item qs-item-ext" href="' + r.prefill_url + '" data-i="' + i + '" title="Open as a new invoice prefilled with this data">' +
+      '<span class="qs-mark" title="Off-system result">↗</span>' +
+      '<span class="qs-line1">' + line1 + '<span class="qs-src">[' + r.label + ']</span></span>' +
+      '<span class="qs-line2">' + line2 + ' → use to create invoice</span>' +
+      '</a>';
+  }
+
+  function render(localResults, externalResults) {
+    items = localResults.concat(externalResults);
+    if (!items.length) {
       box.innerHTML = '<div class="qs-empty">No matches</div>';
       box.hidden = false;
       return;
     }
-    box.innerHTML = results.map(function(r, i) {
-      return '<a class="qs-item" href="/lead/' + r.source + '/' + r.case_number + '" data-i="' + i + '">' +
-        '<span class="qs-mark">' + (r.is_mailed ? '●' : '○') + '</span>' +
-        '<span class="qs-line1"><span class="mono">' + r.case_number + '</span> ' +
-        (r.property_address ? '· ' + r.property_address : '') + '</span>' +
-        '<span class="qs-line2">' + (r.owner_full_name || '—') + '</span>' +
-        '</a>';
-    }).join('');
+    var html = localResults.map(renderRow_local).join('');
+    if (externalResults.length) {
+      html += '<div class="qs-section-hdr">Live cross-reference</div>';
+      html += externalResults.map(function(r, i) { return renderRow_external(r, localResults.length + i); }).join('');
+    }
+    box.innerHTML = html;
     box.hidden = false;
     current = -1;
   }
 
   input.addEventListener('input', function() {
     var q = input.value.trim();
+    lastQ = q;
     if (q.length < 2) { box.hidden = true; box.innerHTML = ''; return; }
+
+    // Serve from cache instantly if we have a complete prior answer.
+    var cached = cache.get(q);
+    if (cached && cached.complete) { render(cached.local, cached.external); return; }
+
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(function() {
-      fetchResults(q).then(render).catch(function() { box.hidden = true; });
-    }, 140);
+      // Cancel any in-flight requests so we don't race with stale results.
+      if (inFlight) inFlight.abort();
+      inFlight = new AbortController();
+      var signal = inFlight.signal;
+
+      // Local result arrives first (typically <100ms) — render it.
+      fetchLocal(q, signal).then(function(local) {
+        if (lastQ !== q) return;     // user kept typing — ignore stale
+        cache.set(q, { local: local, external: [], complete: false });
+        render(local, []);
+        // External is fired in parallel; append when it lands.
+        fetchExternal(q, signal).then(function(external) {
+          if (lastQ !== q) return;
+          cache.set(q, { local: local, external: external, complete: true });
+          render(local, external);
+        });
+      }).catch(function() { /* aborted or net error — ignore */ });
+    }, 200);
   });
 
   input.addEventListener('keydown', function(e) {
