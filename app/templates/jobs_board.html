@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Jobs Board{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('jobs_list') }}">Jobs</a> · Board</p>
+      <h1>Jobs Board</h1>
+      <p class="hero-sub">{{ total }} job{{ '' if total == 1 else 's' }} across {{ statuses|length }} statuses. Click any card to open the job.</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <a class="btn-secondary" href="{{ url_for('jobs_list') }}">List view</a>
+      <a class="btn-primary" href="{{ url_for('job_new') }}">+ New Job</a>
+    </div>
+  </div>
+</section>
+
+<div class="kanban-scroll">
+  <div class="kanban">
+    {% for key, label in statuses %}
+      {% set col_jobs = by_status.get(key, []) %}
+      <div class="k-col k-col-{{ key }}">
+        <div class="k-col-header">
+          <span class="k-col-name">{{ label }}</span>
+          <span class="k-col-count">{{ col_jobs|length }}</span>
+        </div>
+        <div class="k-col-body">
+          {% for j in col_jobs %}
+            <a class="k-card" href="{{ url_for('job_detail', job_id=j.id) }}">
+              <div class="k-card-num mono">{{ j.job_number }}</div>
+              <div class="k-card-client">{{ j.client_name }}</div>
+              {% if j.property_address %}
+                <div class="k-card-prop">{{ j.property_address[:50] }}{% if j.property_address|length > 50 %}…{% endif %}</div>
+              {% endif %}
+              <div class="k-card-meta">
+                {% if j.case_number %}<span class="mono">{{ j.case_number }}</span>{% endif %}
+                {% if j.updated_at %}<span class="k-card-when">{{ j.updated_at[:10] }}</span>{% endif %}
+              </div>
+            </a>
+          {% else %}
+            <div class="k-col-empty">—</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .kanban-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    /* Free the board from the container's max-width */
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .kanban {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 230px;
+    gap: 12px;
+    min-width: max-content;
+    align-items: start;
+  }
+  .k-col {
+    background: var(--surface-2, #f5f4ef);
+    border: 1px solid var(--border, #e7e3da);
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 240px;
+  }
+  .k-col-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+  }
+  .k-col-name {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-mute);
+    font-weight: 600;
+  }
+  .k-col-count {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--surface, #fff);
+    padding: 2px 8px;
+    border-radius: 999px;
+    min-width: 22px;
+    text-align: center;
+  }
+  .k-col-body { display: flex; flex-direction: column; gap: 8px; }
+  .k-col-empty { text-align: center; color: var(--ink-dim, #c0c0c0); padding: 12px 0; font-size: 0.85rem; }
+
+  .k-card {
+    display: block;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e7e3da);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-decoration: none !important;
+    color: var(--ink);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .k-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -6px rgba(0,0,0,0.15);
+  }
+  .k-card-num    { font-size: 0.72rem; color: var(--ink-mute); }
+  .k-card-client { font-weight: 600; font-size: 0.95rem; margin-top: 2px; }
+  .k-card-prop   { font-size: 0.82rem; color: var(--ink-mute); margin-top: 4px; line-height: 1.4; }
+  .k-card-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 0.72rem;
+    color: var(--ink-mute);
+  }
+  .k-card-when { color: var(--ink-dim, #aaa); }
+
+  /* Column accent bars (match dashboard pipeline) */
+  .k-col-intake               { border-top: 3px solid #6366f1; }
+  .k-col-awaiting_survey      { border-top: 3px solid #d97706; }
+  .k-col-awaiting_engineer    { border-top: 3px solid #d97706; }
+  .k-col-permit_prep          { border-top: 3px solid #0ea5e9; }
+  .k-col-submitted            { border-top: 3px solid #2563eb; }
+  .k-col-review_comments      { border-top: 3px solid #dc2626; }
+  .k-col-awaiting_inspection  { border-top: 3px solid #7c3aed; }
+  .k-col-inspection_failed    { border-top: 3px solid #dc2626; }
+  .k-col-approved             { border-top: 3px solid #10b981; }
+  .k-col-closed_won           { border-top: 3px solid #10b981; }
+  .k-col-closed_lost          { border-top: 3px solid #9ca3af; }
+</style>
+{% endblock %}

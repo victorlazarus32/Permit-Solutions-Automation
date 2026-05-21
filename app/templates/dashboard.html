@@ -47,6 +47,156 @@
 </section>
 {% endif %}
 
+{# ===== Jobs pipeline (macro view) =====
+   Horizontal flow showing all statuses with their counts. Each stage is
+   clickable → drills to /jobs?status=KEY. Closed terminals shown separately. #}
+<h2 class="section-heading">Jobs Pipeline · <span style="color: var(--ink-mute); font-weight: 400; font-size: 0.85em;">{{ pipeline_total }} total</span></h2>
+<section class="pipeline-flow">
+  <div class="pf-track">
+    {% set forward = ['intake','awaiting_survey','awaiting_engineer','permit_prep','submitted','review_comments','awaiting_inspection','approved'] %}
+    {% set terminal = ['inspection_failed','closed_won','closed_lost'] %}
+
+    {% for key in forward %}
+      {% set count = pipeline_counts.get(key, 0) %}
+      <a class="pf-stage pf-stage-{{ key }} {% if count >= 5 %}pf-stage-hot{% endif %} {% if count == 0 %}pf-stage-empty{% endif %}"
+         href="{{ url_for('jobs_list', status=key) }}"
+         title="{{ count }} job{{ '' if count == 1 else 's' }} in {{ job_status_label[key] }}">
+        <span class="pf-stage-name">{{ job_status_label[key] }}</span>
+        <span class="pf-stage-count">{{ count }}</span>
+      </a>
+      {% if not loop.last %}<span class="pf-arrow" aria-hidden="true">→</span>{% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Terminal/branch states -->
+  <div class="pf-branches">
+    {% for key in terminal %}
+      {% set count = pipeline_counts.get(key, 0) %}
+      <a class="pf-branch pf-stage-{{ key }} {% if count == 0 %}pf-stage-empty{% endif %}"
+         href="{{ url_for('jobs_list', status=key) }}"
+         title="{{ count }} job{{ '' if count == 1 else 's' }} in {{ job_status_label[key] }}">
+        <span class="pf-stage-name">{{ job_status_label[key] }}</span>
+        <span class="pf-stage-count">{{ count }}</span>
+      </a>
+    {% endfor %}
+    <a class="pf-board-link" href="{{ url_for('jobs_board') }}" title="Open Kanban board view of jobs">
+      Open Kanban board →
+    </a>
+  </div>
+</section>
+
+<style>
+  .pipeline-flow {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e7e3da);
+    border-radius: 12px;
+    padding: 18px 16px;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  }
+  .pf-track {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .pf-stage {
+    flex: 0 0 auto;
+    min-width: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #fafaf8;
+    text-decoration: none !important;
+    color: var(--ink);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .pf-stage:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -8px rgba(0,0,0,0.20);
+  }
+  .pf-stage-name {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-mute);
+    text-align: center;
+    font-weight: 600;
+  }
+  .pf-stage-count {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .pf-stage-empty .pf-stage-count { color: var(--ink-dim, #c0c0c0); font-weight: 500; }
+  .pf-stage-hot {
+    border-color: var(--orange, #f08a24);
+    background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+  }
+  .pf-stage-hot .pf-stage-count { color: var(--orange, #f08a24); }
+
+  /* Stage-specific accent borders along the bottom */
+  .pf-stage-intake              { border-bottom: 3px solid #6366f1; }
+  .pf-stage-awaiting_survey,
+  .pf-stage-awaiting_engineer   { border-bottom: 3px solid #d97706; }
+  .pf-stage-permit_prep         { border-bottom: 3px solid #0ea5e9; }
+  .pf-stage-submitted           { border-bottom: 3px solid #2563eb; }
+  .pf-stage-review_comments     { border-bottom: 3px solid #dc2626; }
+  .pf-stage-awaiting_inspection { border-bottom: 3px solid #7c3aed; }
+  .pf-stage-approved            { border-bottom: 3px solid #10b981; }
+  .pf-stage-inspection_failed   { border-bottom: 3px solid #dc2626; }
+  .pf-stage-closed_won          { border-bottom: 3px solid #10b981; }
+  .pf-stage-closed_lost         { border-bottom: 3px solid #9ca3af; }
+
+  .pf-arrow {
+    color: var(--ink-dim, #c0c0c0);
+    font-size: 1rem;
+    user-select: none;
+    flex: 0 0 auto;
+  }
+
+  .pf-branches {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+    flex-wrap: wrap;
+  }
+  .pf-branch {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #fafaf8;
+    text-decoration: none !important;
+    color: var(--ink);
+    font-size: 0.85rem;
+  }
+  .pf-branch .pf-stage-name { text-transform: none; letter-spacing: 0; color: var(--ink-mute); font-size: 0.85rem; font-weight: 500; }
+  .pf-branch .pf-stage-count { font-size: 1rem; font-weight: 700; }
+  .pf-branch:hover { background: #f3f3ee; }
+  .pf-board-link {
+    margin-left: auto;
+    font-size: 0.85rem;
+    color: var(--orange, #f08a24);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .pf-board-link:hover { text-decoration: underline; }
+</style>
+
 <h2 class="section-heading">Conversion Funnel</h2>
 <section class="funnel">
 

@@ -698,6 +698,9 @@ def dashboard():
 
     lob_ok, lob_reason = _lob_ready()
 
+    # Jobs pipeline (macro view): { status_key: count } for the flow widget
+    pipeline_counts = jobs_mod.status_counts()
+
     return render_template(
         "dashboard.html",
         totals=totals,
@@ -713,6 +716,10 @@ def dashboard():
         lob_reason=lob_reason,
         today=dt.date.today().strftime("%A, %B %d, %Y"),
         today_iso=dt.date.today().isoformat(),
+        job_statuses=jobs_mod.STATUSES,
+        job_status_label=jobs_mod.STATUS_LABEL,
+        pipeline_counts=pipeline_counts,
+        pipeline_total=sum(pipeline_counts.values()),
     )
 
 
@@ -1578,6 +1585,23 @@ def jobs_list():
         status_label=jobs_mod.STATUS_LABEL,
         counts=counts,
         open_tasks=jobs_mod.list_open_tasks_all(limit=20),
+    )
+
+
+@app.route("/jobs/board")
+def jobs_board():
+    """Kanban-style board: one column per status, job cards in each column."""
+    all_jobs = jobs_mod.list_jobs(limit=1000)
+    # Group by status for easy column rendering
+    by_status: dict[str, list[dict]] = {k: [] for k, _ in jobs_mod.STATUSES}
+    for j in all_jobs:
+        by_status.setdefault(j["status"], []).append(j)
+    return render_template(
+        "jobs_board.html",
+        by_status=by_status,
+        statuses=jobs_mod.STATUSES,
+        status_label=jobs_mod.STATUS_LABEL,
+        total=len(all_jobs),
     )
 
 
