@@ -1467,7 +1467,6 @@ def scope_module_new():
         f = request.form
         try:
             m = scope_mod.create_module(
-                key=(f.get("key") or "").strip(),
                 name=(f.get("name") or "").strip(),
                 body=_fs(f, "body"),
                 category=_fs(f, "category"),

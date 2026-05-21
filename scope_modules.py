@@ -25,10 +25,28 @@ from db import connect
 
 
 _VAR_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+_KEY_SAFE_RE = re.compile(r"[^a-z0-9]+")
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _slugify(name: str) -> str:
+    """Lowercase name -> snake_case key. Strips punctuation and trims."""
+    s = (name or "").strip().lower()
+    s = _KEY_SAFE_RE.sub("_", s).strip("_")
+    return s or "module"
+
+
+def _unique_key(base: str) -> str:
+    """If `base` already exists, append _2, _3, ... until we find a free one."""
+    candidate = base
+    n = 2
+    while get_by_key(candidate):
+        candidate = f"{base}_{n}"
+        n += 1
+    return candidate
 
 
 # ---------- CRUD ----------
@@ -69,14 +87,14 @@ def list_categories() -> list[str]:
     return [r[0] for r in rows]
 
 
-def create_module(*, key: str, name: str, body: str | None = None,
+def create_module(*, name: str, key: str | None = None, body: str | None = None,
                   category: str | None = None, sort_order: int = 100) -> dict:
-    key = (key or "").strip().lower().replace(" ", "_")
     name = (name or "").strip()
-    if not key:
-        raise ValueError("Module key is required.")
     if not name:
         raise ValueError("Module name is required.")
+    # Caller can pass an explicit key (seed data, scripts) but the UI no longer
+    # exposes it — we auto-slug from the name and uniquify if needed.
+    key = (key or "").strip().lower().replace(" ", "_") or _unique_key(_slugify(name))
     if get_by_key(key):
         raise ValueError(f"A module with key {key!r} already exists.")
     now = _now()

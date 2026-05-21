@@ -8,7 +8,7 @@
       <h1>Scope of Services Modules</h1>
       <p class="hero-sub">
         Reusable text blocks that assemble into the "Scope of Services" section on invoices.
-        Use <span class="mono">{{ '{{jurisdiction}}' }}</span>, <span class="mono">{{ '{{fence_type}}' }}</span>, etc. for variables.
+        Use <span class="mono">{{ '{{jurisdiction}}' }}</span>, <span class="mono">{{ '{{subtype}}' }}</span>, etc. in the body for variables that get filled in per invoice.
       </p>
     </div>
     <div style="display: flex; gap: 8px;">
@@ -28,7 +28,6 @@
     <tr>
       <th style="width: 4em;">Order</th>
       <th>Name</th>
-      <th>Key</th>
       <th>Category</th>
       <th>Preview</th>
       <th class="col-actions">Actions</th>
@@ -39,7 +38,6 @@
     <tr>
       <td>{{ m.sort_order }}</td>
       <td><strong>{{ m.name }}</strong></td>
-      <td class="mono" style="font-size: 0.85rem;">{{ m.key }}</td>
       <td>{% if m.category %}<span class="kw-chip">{{ m.category }}</span>{% else %}—{% endif %}</td>
       <td class="cell-narrative">{{ (m.body or '')[:140] }}{% if m.body and m.body|length > 140 %}…{% endif %}</td>
       <td class="col-actions" style="white-space: nowrap;">

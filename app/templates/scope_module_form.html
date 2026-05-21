@@ -34,20 +34,13 @@
 
   <div class="form-row">
     <div class="form-field">
-      <label for="key">Key (machine slug)</label>
-      <input type="text" name="key" id="key"
-             {% if is_edit %}readonly{% endif %}
-             pattern="[a-z][a-z0-9_]*" maxlength="60"
-             placeholder="compliance_review"
-             value="{{ module.key if is_edit else '' }}">
-    </div>
-    <div class="form-field">
       <label for="category">Category</label>
       <input type="text" name="category" id="category" maxlength="60"
              placeholder="general / fence / permit"
              value="{{ module.category if is_edit and module.category else '' }}">
     </div>
   </div>
+  {# Auto-generated machine key (hidden from UI, set server-side from the name) #}
 
   <div class="form-row single">
     <div class="form-field">
