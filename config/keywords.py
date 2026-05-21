@@ -9,11 +9,13 @@ To remove: delete or comment out the line.
 
 The filter searches the AllegedViolation field on each case row.
 
-Trade scope (Allday Fence and adjacent work):
-fences, gates, durafence, doors, garage, windows, pergolas, terraces, electrical.
-The material+structure compound entries (pvc fence, metal gate, wood fence, etc.)
-are functionally redundant with the bare fence/gate regexes, but they make the
-matched_keywords column self-documenting at review time.
+Trade scope (Allday Fence + Esteban's roofing license + adjacent work):
+fences, gates, durafence, doors, garage, windows, pergolas, terraces,
+electrical, sheds, and roofing (added 2026-05-21 — Esteban is a licensed
+roofing contractor so any roofing violation is in-scope for letter mailing).
+The material+structure compound entries (pvc fence, metal gate, wood fence,
+etc.) are functionally redundant with the bare fence/gate regexes, but they
+make the matched_keywords column self-documenting at review time.
 """
 
 KEYWORD_PATTERNS = [
@@ -56,4 +58,12 @@ KEYWORD_PATTERNS = [
 
     # Electrical
     r"\belectrical\b",
+
+    # Roofing (added 2026-05-21 — Esteban is licensed for roofing).
+    # Covers: roof, roofs, roofed, roofing, roofer(s), and re-roof variants
+    # (re-roof, reroof, re-roofing, etc.).
+    r"\broof(s|ed|ing|er|ers)?\b",
+    r"\bre[- ]?roof(s|ed|ing)?\b",
+    r"\bshingles?\b",
+    r"\bre[- ]?shingl(e|es|ing)\b",
 ]
