@@ -1048,6 +1048,15 @@ import scope_modules as scope_mod  # noqa: E402
 from app.quotes import random_quote  # noqa: E402
 
 
+# Inject a random motivational quote into every in-app page render.
+# This DOES NOT affect customer-facing PDFs (invoice.html, violation
+# letter) because those are rendered via a separate Jinja Environment
+# that doesn't see Flask context processors.
+@app.context_processor
+def _inject_quote():
+    return {"quote": random_quote()}
+
+
 def _parse_line_items_from_form(form) -> list[dict]:
     """
     Collect line items from a form. Inputs are repeated names:
@@ -1245,7 +1254,6 @@ def invoice_new():
         contracts_available=contracts_mod.list_contracts(),
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
         scope_modules_available=scope_mod.list_modules(),
-        quote=random_quote(),
     )
 
 
@@ -1326,7 +1334,6 @@ def invoice_edit(invoice_id: int):
         contracts_available=contracts_mod.list_contracts(),
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
         scope_modules_available=scope_mod.list_modules(),
-        quote=random_quote(),
     )
 
 

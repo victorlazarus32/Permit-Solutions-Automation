@@ -75,10 +75,43 @@
   {% block content %}{% endblock %}
 </main>
 
+{% if quote %}
+<div class="footer-quote" role="complementary" aria-label="Quote of the moment">
+  <span class="fq-text">"{{ quote.text }}"</span>
+  <span class="fq-author">— {{ quote.author }}</span>
+</div>
+{% endif %}
+
 <footer class="footer">
   <span>Permit Solutions Operator Console</span>
   <span>{{ now }}</span>
 </footer>
+
+<style>
+  .footer-quote {
+    max-width: 920px;
+    margin: 28px auto 8px;
+    padding: 14px 22px;
+    border-left: 3px solid var(--orange, #f08a24);
+    background: rgba(240, 138, 36, 0.04);
+    border-radius: 0 8px 8px 0;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--ink-mute, #555);
+  }
+  .footer-quote .fq-text { font-style: italic; }
+  .footer-quote .fq-author {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--ink-dim, #999);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  @media (max-width: 640px) {
+    .footer-quote { margin: 18px 14px 8px; padding: 12px 16px; font-size: 0.88rem; }
+  }
+</style>
 
 <script>
 /* ===== Mobile menu toggle ===== */
