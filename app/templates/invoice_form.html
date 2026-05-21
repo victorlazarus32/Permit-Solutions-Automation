@@ -114,6 +114,19 @@
         <th style="width: 4%;"></th>
       </tr>
     </thead>
+
+    <!-- Single shared list of standard service types — same list the
+         Scope of Services Service Type dropdown uses. Pick from it OR
+         type custom text. Update the options here and it propagates. -->
+    <datalist id="service_types_list">
+      <option value="Fence Violation Resolution">
+      <option value="After-The-Fact Permit">
+      <option value="Permit Expediting">
+      <option value="Code Violation Compliance">
+      <option value="Engineering Coordination">
+      <option value="Municipal Permit Processing">
+      <option value="Inspection Coordination">
+    </datalist>
     <tbody>
       {% set rows_to_render = invoice_line_items if is_edit else [] %}
       {% if not is_edit and p.suggested_amount %}
@@ -122,7 +135,7 @@
       {% if rows_to_render %}
         {% for li in rows_to_render %}
         <tr class="line-row">
-          <td><input type="text" name="line_description" value="{{ li.description }}" placeholder="Service description"></td>
+          <td><input type="text" name="line_description" list="service_types_list" value="{{ li.description }}" placeholder="Service description"></td>
           <td><input type="text" name="line_quantity"    value="{{ '{:g}'.format(li.quantity) }}" inputmode="decimal"></td>
           <td><input type="text" name="line_unit_price"  value="{{ '{:.2f}'.format(li.unit_price) }}" inputmode="decimal"></td>
           <td class="line-amount num">${{ '{:,.2f}'.format(li.amount) }}</td>
@@ -131,7 +144,7 @@
         {% endfor %}
       {% else %}
         <tr class="line-row">
-          <td><input type="text" name="line_description" placeholder="Service description"></td>
+          <td><input type="text" name="line_description" list="service_types_list" placeholder="Service description"></td>
           <td><input type="text" name="line_quantity"   value="1" inputmode="decimal"></td>
           <td><input type="text" name="line_unit_price" value="" inputmode="decimal"></td>
           <td class="line-amount num">$0.00</td>
@@ -221,16 +234,9 @@
   <div class="form-row">
     <div class="form-field">
       <label for="scope_service_type">Service Type</label>
-      <select id="scope_service_type">
-        <option value="">— Choose —</option>
-        <option>Fence Violation Resolution</option>
-        <option>After-The-Fact Permit</option>
-        <option>Permit Expediting</option>
-        <option>Code Violation Compliance</option>
-        <option>Engineering Coordination</option>
-        <option>Municipal Permit Processing</option>
-        <option>Inspection Coordination</option>
-      </select>
+      {# Type-ahead off the same datalist the line items use, so the lists
+         stay synchronized and the user can also type a custom value. #}
+      <input type="text" id="scope_service_type" list="service_types_list" placeholder="— Choose or type —">
     </div>
     <div class="form-field">
       <label for="scope_subtype">Subtype</label>
@@ -429,7 +435,7 @@
     var tr = document.createElement('tr');
     tr.className = 'line-row';
     tr.innerHTML =
-      '<td><input type="text" name="line_description" placeholder="Service description"></td>' +
+      '<td><input type="text" name="line_description" list="service_types_list" placeholder="Service description"></td>' +
       '<td><input type="text" name="line_quantity" value="1" inputmode="decimal"></td>' +
       '<td><input type="text" name="line_unit_price" value="" inputmode="decimal"></td>' +
       '<td class="line-amount num">$0.00</td>' +
