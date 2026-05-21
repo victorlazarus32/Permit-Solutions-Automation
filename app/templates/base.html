@@ -8,6 +8,36 @@
 </head>
 <body>
 
+<!-- ===== Ambient decoration: fixed-position SVG accents behind all content =====
+     Pure decoration. Pointer-events disabled so they never interfere with
+     interaction. Low opacity so they whisper, not shout. -->
+<div class="ambient" aria-hidden="true">
+  <!-- Top-right: large orange ring -->
+  <svg class="amb amb-ring-tr" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+    <circle cx="100" cy="100" r="92" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <circle cx="100" cy="100" r="62" fill="none" stroke="currentColor" stroke-width="1"/>
+    <circle cx="100" cy="100" r="32" fill="none" stroke="currentColor" stroke-width="0.7"/>
+  </svg>
+  <!-- Bottom-left: scattered dots pattern -->
+  <svg class="amb amb-dots-bl" viewBox="0 0 160 160" preserveAspectRatio="xMinYMax meet">
+    <g fill="currentColor">
+      <circle cx="10"  cy="20"  r="1.6"/><circle cx="30"  cy="20"  r="1.6"/><circle cx="50"  cy="20"  r="1.6"/><circle cx="70"  cy="20"  r="1.6"/>
+      <circle cx="10"  cy="40"  r="1.6"/><circle cx="30"  cy="40"  r="1.6"/><circle cx="50"  cy="40"  r="1.6"/>
+      <circle cx="10"  cy="60"  r="1.6"/><circle cx="30"  cy="60"  r="1.6"/>
+      <circle cx="10"  cy="80"  r="1.6"/>
+    </g>
+  </svg>
+  <!-- Right side: a thin vertical arc -->
+  <svg class="amb amb-arc-r" viewBox="0 0 80 360" preserveAspectRatio="xMinYMid meet">
+    <path d="M 70 20 Q 0 180 70 340" fill="none" stroke="currentColor" stroke-width="1.1"/>
+  </svg>
+  <!-- Mid-left: small triangle cluster -->
+  <svg class="amb amb-tri-ml" viewBox="0 0 80 80" preserveAspectRatio="xMinYMid meet">
+    <polygon points="20,10 36,38 4,38"  fill="none" stroke="currentColor" stroke-width="1"/>
+    <polygon points="50,28 66,56 34,56" fill="none" stroke="currentColor" stroke-width="0.7"/>
+  </svg>
+</div>
+
 <header class="topbar">
   <a href="{{ url_for('dashboard') }}" class="brand">
     <img src="{{ url_for('static', filename='permit_solutions_logo.png') }}"
@@ -78,7 +108,7 @@
 {% if quote %}
 <div class="footer-quote" role="complementary" aria-label="Quote of the moment">
   <span class="fq-text">"{{ quote.text }}"</span>
-  <span class="fq-author">— {{ quote.author }}</span>
+  <span class="fq-author">{{ quote.author }}</span>
 </div>
 {% endif %}
 
@@ -88,28 +118,121 @@
 </footer>
 
 <style>
-  .footer-quote {
-    max-width: 920px;
-    margin: 28px auto 8px;
-    padding: 14px 22px;
-    border-left: 3px solid var(--orange, #f08a24);
-    background: rgba(240, 138, 36, 0.04);
-    border-radius: 0 8px 8px 0;
-    font-size: 0.92rem;
-    line-height: 1.5;
-    color: var(--ink-mute, #555);
+  /* ===== Ambient decoration layer ===== */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
   }
-  .footer-quote .fq-text { font-style: italic; }
-  .footer-quote .fq-author {
+  .ambient .amb { position: absolute; }
+  .amb-ring-tr {
+    top: -50px; right: -60px;
+    width: 360px; height: 360px;
+    color: var(--orange, #f08a24);
+    opacity: 0.10;
+  }
+  .amb-dots-bl {
+    left: 18px; bottom: 70px;
+    width: 130px; height: 130px;
+    color: var(--orange, #f08a24);
+    opacity: 0.22;
+  }
+  .amb-arc-r {
+    right: 0; top: 38%;
+    width: 80px; height: 360px;
+    color: #2b2b2b;
+    opacity: 0.06;
+  }
+  .amb-tri-ml {
+    left: 22px; top: 36%;
+    width: 60px; height: 60px;
+    color: var(--orange, #f08a24);
+    opacity: 0.16;
+  }
+  /* Keep ambient art tucked under content (which is in main/footer) */
+  .topbar, main, footer, .footer-quote { position: relative; z-index: 1; }
+  /* Don't fight with very narrow screens */
+  @media (max-width: 640px) {
+    .amb-ring-tr { width: 220px; height: 220px; top: -30px; right: -50px; }
+    .amb-dots-bl { width: 90px;  height: 90px;  bottom: 90px; }
+    .amb-arc-r   { display: none; }
+    .amb-tri-ml  { display: none; }
+  }
+
+  /* ===== Footer quote — beefier, more presence ===== */
+  .footer-quote {
+    position: relative;
+    max-width: 920px;
+    margin: 36px auto 12px;
+    padding: 28px 36px 26px 56px;
+    background:
+      linear-gradient(135deg, #fff7ed 0%, #ffffff 75%);
+    border: 1px solid var(--border, #e7e3da);
+    border-left: 4px solid var(--orange, #f08a24);
+    border-radius: 0 14px 14px 0;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--ink, #2b2b2b);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,0.02),
+      0 24px 50px -38px rgba(180, 90, 0, 0.30);
+    overflow: hidden;
+  }
+  /* Oversized opening quote mark, bottom-right decorative element */
+  .footer-quote::before {
+    content: "\201C";
+    position: absolute;
+    left: 12px; top: -8px;
+    font-family: Georgia, serif;
+    font-size: 88px;
+    line-height: 1;
+    color: var(--orange, #f08a24);
+    opacity: 0.22;
+    pointer-events: none;
+  }
+  .footer-quote::after {
+    content: "";
+    position: absolute;
+    right: -60px; bottom: -60px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(240,138,36,0.10) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .footer-quote .fq-text {
     display: block;
-    margin-top: 6px;
-    font-size: 0.78rem;
-    color: var(--ink-dim, #999);
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+  }
+  .footer-quote .fq-author {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 0.74rem;
+    color: var(--ink-mute, #777);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+  }
+  /* Decorative dash before the author name */
+  .footer-quote .fq-author::before {
+    content: "";
+    display: inline-block;
+    width: 28px; height: 2px;
+    background: var(--orange, #f08a24);
+    border-radius: 1px;
   }
   @media (max-width: 640px) {
-    .footer-quote { margin: 18px 14px 8px; padding: 12px 16px; font-size: 0.88rem; }
+    .footer-quote {
+      margin: 22px 14px 10px;
+      padding: 22px 20px 22px 38px;
+      font-size: 0.95rem;
+    }
+    .footer-quote::before { font-size: 64px; left: 8px; top: -4px; }
   }
 </style>
 

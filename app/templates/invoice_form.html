@@ -315,7 +315,7 @@
 <aside class="invoice-quote-card">
   <div class="iq-mark" aria-hidden="true">"</div>
   <p class="iq-text">{{ quote.text }}</p>
-  <p class="iq-author">— {{ quote.author }}</p>
+  <p class="iq-author">{{ quote.author }}</p>
 </aside>
 {% endif %}
 
@@ -335,36 +335,76 @@
   .invoice-quote-card {
     position: sticky;
     top: 96px;                 /* clears the topbar */
-    padding: 28px 22px 22px;
-    border-radius: 14px;
-    background: linear-gradient(155deg, #fff7ed 0%, #fff 65%);
+    padding: 32px 24px 26px;
+    border-radius: 16px;
+    background:
+      linear-gradient(150deg, #fff7ed 0%, #ffffff 70%);
     border: 1px solid var(--border, #e7e3da);
-    box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 18px 40px -28px rgba(180, 90, 0, 0.25);
+    box-shadow:
+      0 1px 0 rgba(0,0,0,0.02),
+      0 24px 50px -32px rgba(180, 90, 0, 0.30);
     overflow: hidden;
+  }
+  /* Decorative concentric quarter-rings in the lower-right corner */
+  .invoice-quote-card::after {
+    content: "";
+    position: absolute;
+    right: -80px; bottom: -80px;
+    width: 200px; height: 200px;
+    background:
+      radial-gradient(circle at 0 0,
+        transparent 60px,
+        rgba(240, 138, 36, 0.10) 61px,
+        rgba(240, 138, 36, 0.10) 62px,
+        transparent 63px,
+        transparent 90px,
+        rgba(240, 138, 36, 0.08) 91px,
+        rgba(240, 138, 36, 0.08) 92px,
+        transparent 93px,
+        transparent 130px,
+        rgba(240, 138, 36, 0.06) 131px,
+        rgba(240, 138, 36, 0.06) 132px,
+        transparent 133px);
+    pointer-events: none;
   }
   .invoice-quote-card .iq-mark {
     position: absolute;
-    top: -18px; right: 14px;
+    top: -22px; right: 18px;
     font-family: Georgia, serif;
-    font-size: 96px;
+    font-size: 110px;
     line-height: 1;
     color: var(--orange, #f08a24);
-    opacity: 0.18;
+    opacity: 0.22;
     pointer-events: none;
+    font-weight: 700;
   }
   .invoice-quote-card .iq-text {
-    font-size: 1.02rem;
-    line-height: 1.55;
+    position: relative;
+    font-size: 1.04rem;
+    line-height: 1.6;
     color: var(--ink, #2b2b2b);
-    margin: 0 0 14px;
+    margin: 0 0 18px;
     font-weight: 500;
+    font-style: italic;
   }
   .invoice-quote-card .iq-author {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     margin: 0;
-    font-size: 0.82rem;
-    color: var(--ink-mute, #888);
+    font-size: 0.76rem;
+    color: var(--ink-mute, #777);
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+  }
+  .invoice-quote-card .iq-author::before {
+    content: "";
+    display: inline-block;
+    width: 24px; height: 2px;
+    background: var(--orange, #f08a24);
+    border-radius: 1px;
   }
 </style>
 
