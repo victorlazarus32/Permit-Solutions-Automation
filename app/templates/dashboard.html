@@ -68,6 +68,30 @@
     {% endfor %}
   </div>
 
+  {# Stuck jobs — sits inline within the pipeline widget so the macro view
+     also surfaces "where is friction right now". #}
+  {% if stuck_jobs %}
+  <div class="stuck-jobs">
+    <div class="stuck-header">
+      <span class="stuck-label">⚠ Stuck Jobs</span>
+      <span class="stuck-count">{{ stuck_jobs|length }}</span>
+      <span class="stuck-help">Sitting in their current status longer than the threshold</span>
+    </div>
+    <ul class="stuck-list">
+      {% for j in stuck_jobs %}
+      <li>
+        <a class="stuck-link" href="{{ url_for('job_detail', job_id=j.id) }}">
+          <span class="mono">{{ j.job_number }}</span>
+          <span class="stuck-client">· {{ j.client_name }}</span>
+          <span class="stuck-status">{{ job_status_label[j.status] }}</span>
+          <span class="stuck-days">{{ j.days_in_status }}d / {{ j.threshold_days }}d threshold</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   <!-- Terminal/branch states -->
   <div class="pf-branches">
     {% for key in terminal %}
@@ -195,6 +219,74 @@
     font-weight: 600;
   }
   .pf-board-link:hover { text-decoration: underline; }
+
+  /* ===== Stuck jobs block ===== */
+  .stuck-jobs {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+  }
+  .stuck-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .stuck-label {
+    font-weight: 700;
+    color: #991b1b;
+    font-size: 0.92rem;
+  }
+  .stuck-count {
+    background: #dc2626;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .stuck-help {
+    margin-left: auto;
+    color: var(--ink-mute);
+    font-size: 0.78rem;
+  }
+  .stuck-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .stuck-list li {
+    border-top: 1px solid #fecaca;
+  }
+  .stuck-list li:first-child { border-top: 0; }
+  .stuck-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+    text-decoration: none !important;
+    color: var(--ink);
+    font-size: 0.88rem;
+    flex-wrap: wrap;
+  }
+  .stuck-link:hover { background: rgba(254, 202, 202, 0.4); }
+  .stuck-client { color: var(--ink-mute); }
+  .stuck-status {
+    margin-left: auto;
+    color: #991b1b;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .stuck-days {
+    font-size: 0.78rem;
+    color: var(--ink-mute);
+    min-width: 130px;
+    text-align: right;
+  }
 </style>
 
 <h2 class="section-heading">Conversion Funnel</h2>

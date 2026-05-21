@@ -94,6 +94,22 @@ STATUS_AUTO_TASKS: dict[str, list[dict]] = {
 AUTO_PREFIX = "[auto] "
 
 
+# Per-status "stuck" thresholds — how many days a job can sit in a status
+# before it shows up on the "Stuck Jobs" widget. Terminal statuses are
+# excluded entirely (a closed job can't be stuck).
+STUCK_THRESHOLDS_DAYS: dict[str, int] = {
+    "intake":               3,
+    "awaiting_survey":      7,
+    "awaiting_engineer":    10,
+    "permit_prep":          5,
+    "submitted":            14,
+    "review_comments":      7,
+    "awaiting_inspection":  14,
+    "inspection_failed":    7,
+    "approved":             7,
+}
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -392,6 +408,60 @@ def delete_task(task_id: int) -> None:
     with connect() as conn:
         conn.execute("DELETE FROM job_tasks WHERE id = ?", (task_id,))
 
+
+# ---------- Stuck-job detection ----------
+
+def list_stuck_jobs(limit: int = 50) -> list[dict]:
+    """
+    Return non-terminal jobs that have been in their current status longer
+    than STUCK_THRESHOLDS_DAYS for that status. Each result dict includes:
+        + entered_status_at  — when this status was entered (ISO)
+        + days_in_status     — int, full days since entered
+        + threshold_days     — the stuck threshold for this status
+
+    Sorted by days_in_status DESC so the most-stuck float to the top.
+    """
+    from datetime import datetime as _dt
+    with connect() as conn:
+        # For each job, find when it entered its CURRENT status. Pick the
+        # most recent history row whose to_status matches the job's status.
+        rows = conn.execute(
+            """
+            SELECT j.*,
+                   (SELECT MAX(h.transitioned_at) FROM job_status_history h
+                     WHERE h.job_id = j.id AND h.to_status = j.status) AS entered_status_at
+              FROM jobs j
+             WHERE j.status NOT IN ('closed_won', 'closed_lost')
+            """
+        ).fetchall()
+
+    today = _dt.now(timezone.utc)
+    out: list[dict] = []
+    for r in rows:
+        threshold = STUCK_THRESHOLDS_DAYS.get(r["status"])
+        if threshold is None:
+            continue
+        entered = r["entered_status_at"] or r["opened_at"]
+        if not entered:
+            continue
+        try:
+            entered_dt = _dt.fromisoformat(entered.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        days = (today - entered_dt).days
+        if days < threshold:
+            continue
+        d = dict(r)
+        d["entered_status_at"] = entered
+        d["days_in_status"] = days
+        d["threshold_days"] = threshold
+        out.append(d)
+
+    out.sort(key=lambda d: d["days_in_status"], reverse=True)
+    return out[:limit]
+
+
+# ---------- Internal helpers ----------
 
 def _get_task(task_id: int) -> dict | None:
     with connect() as conn:

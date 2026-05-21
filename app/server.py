@@ -700,6 +700,8 @@ def dashboard():
 
     # Jobs pipeline (macro view): { status_key: count } for the flow widget
     pipeline_counts = jobs_mod.status_counts()
+    # Stuck jobs — non-terminal jobs that have outstayed their threshold
+    stuck_jobs = jobs_mod.list_stuck_jobs(limit=10)
 
     return render_template(
         "dashboard.html",
@@ -720,6 +722,7 @@ def dashboard():
         job_status_label=jobs_mod.STATUS_LABEL,
         pipeline_counts=pipeline_counts,
         pipeline_total=sum(pipeline_counts.values()),
+        stuck_jobs=stuck_jobs,
     )
 
 
