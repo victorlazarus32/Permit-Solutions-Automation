@@ -1276,13 +1276,18 @@ def _render_invoice_pdf(inv: dict) -> bytes:
 @app.route("/invoices")
 def invoices_list():
     status = (request.args.get("status") or "").strip() or None
-    invoices = inv_mod.list_invoices(status=status, limit=500)
+    workflow_status = (request.args.get("workflow_status") or "").strip() or None
+    if workflow_status:
+        invoices = inv_mod.list_by_workflow_status(workflow_status, limit=500)
+    else:
+        invoices = inv_mod.list_invoices(status=status, limit=500)
     stats = inv_mod.summary_stats()
     return render_template(
         "invoices_list.html",
         invoices=invoices,
         stats=stats,
         active_status=status or "all",
+        active_workflow_status=workflow_status,
     )
 
 

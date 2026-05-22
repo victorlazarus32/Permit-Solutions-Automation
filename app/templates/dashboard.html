@@ -59,7 +59,7 @@
     {% for key in forward %}
       {% set count = pipeline_counts.get(key, 0) %}
       <a class="pf-stage pf-stage-{{ key }} {% if count >= 5 %}pf-stage-hot{% endif %} {% if count == 0 %}pf-stage-empty{% endif %}"
-         href="{{ url_for('jobs_list', status=key) }}"
+         href="{{ url_for('invoices_list', workflow_status=key) }}"
          title="{{ count }} job{{ '' if count == 1 else 's' }} in {{ job_status_label[key] }}">
         <span class="pf-stage-name">{{ job_status_label[key] }}</span>
         <span class="pf-stage-count">{{ count }}</span>
@@ -73,17 +73,17 @@
   {% if stuck_jobs %}
   <div class="stuck-jobs">
     <div class="stuck-header">
-      <span class="stuck-label">⚠ Stuck Jobs</span>
+      <span class="stuck-label">⚠ Stuck Invoices</span>
       <span class="stuck-count">{{ stuck_jobs|length }}</span>
-      <span class="stuck-help">Sitting in their current status longer than the threshold</span>
+      <span class="stuck-help">Sitting in their current workflow status longer than the threshold</span>
     </div>
     <ul class="stuck-list">
       {% for j in stuck_jobs %}
       <li>
-        <a class="stuck-link" href="{{ url_for('job_detail', job_id=j.id) }}">
-          <span class="mono">{{ j.job_number }}</span>
+        <a class="stuck-link" href="{{ url_for('invoice_detail', invoice_id=j.id) }}">
+          <span class="mono">{{ j.invoice_number }}</span>
           <span class="stuck-client">· {{ j.client_name }}</span>
-          <span class="stuck-status">{{ job_status_label[j.status] }}</span>
+          <span class="stuck-status">{{ job_status_label.get(j.workflow_status, j.workflow_status) }}</span>
           <span class="stuck-days">{{ j.days_in_status }}d / {{ j.threshold_days }}d threshold</span>
         </a>
       </li>
@@ -97,14 +97,14 @@
     {% for key in terminal %}
       {% set count = pipeline_counts.get(key, 0) %}
       <a class="pf-branch pf-stage-{{ key }} {% if count == 0 %}pf-stage-empty{% endif %}"
-         href="{{ url_for('jobs_list', status=key) }}"
+         href="{{ url_for('invoices_list', workflow_status=key) }}"
          title="{{ count }} job{{ '' if count == 1 else 's' }} in {{ job_status_label[key] }}">
         <span class="pf-stage-name">{{ job_status_label[key] }}</span>
         <span class="pf-stage-count">{{ count }}</span>
       </a>
     {% endfor %}
-    <a class="pf-board-link" href="{{ url_for('jobs_board') }}" title="Open Kanban board view of jobs">
-      Open Kanban board →
+    <a class="pf-board-link" href="{{ url_for('invoices_list') }}" title="Open the full invoices list">
+      View all invoices →
     </a>
   </div>
 </section>
