@@ -127,7 +127,7 @@
   <div class="lead-col">
 
     <div class="lead-card">
-      <h3 class="lead-card-title">Status & Dates</h3>
+      <h3 class="lead-card-title">Billing</h3>
       <div class="lead-kv">
         <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ inv.status }}">{{ 'ESTIMATE' if inv.status == 'draft' else inv.status|upper }}</span></span></div>
         <div class="kv"><span class="k">Issued</span><span class="v">{{ inv.issued_at[:10] if inv.issued_at else '—' }}</span></div>
@@ -137,6 +137,125 @@
         {% if inv.payment_reference %}<div class="kv"><span class="k">Reference</span><span class="v mono">{{ inv.payment_reference }}</span></div>{% endif %}
       </div>
     </div>
+
+    {# ===== Workflow (formerly the Jobs feature, now part of every invoice) ===== #}
+    <div class="lead-card">
+      <h3 class="lead-card-title">
+        Workflow
+        <span class="status status-{{ inv.workflow_status or 'intake' }}" style="font-size: 0.78rem; padding: 3px 9px; margin-left: 6px;">
+          {{ workflow_status_label.get(inv.workflow_status or 'intake', 'Intake') }}
+        </span>
+      </h3>
+      <form method="POST" action="{{ url_for('invoice_workflow_transition', invoice_id=inv.id) }}">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="wf_to_status">Move workflow to</label>
+            <select name="to_status" id="wf_to_status" required>
+              {% for key, label in workflow_statuses %}
+                {% if key != (inv.workflow_status or 'intake') %}
+                  <option value="{{ key }}">{{ label }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row single">
+          <div class="form-field">
+            <label for="wf_note">Note (optional)</label>
+            <input type="text" name="note" id="wf_note" placeholder="e.g. Engineer sent stamped drawings">
+          </div>
+        </div>
+        <div class="form-row single" style="margin-top: 2px;">
+          <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem;">
+            <input type="checkbox" name="skip_auto_tasks" value="1"> Skip auto-tasks for this transition
+          </label>
+        </div>
+        <button type="submit" class="btn-primary" style="margin-top: 8px;">Update Workflow</button>
+      </form>
+    </div>
+
+    {# ===== Tasks ===== #}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Tasks</h3>
+      {% set open_tasks = invoice_tasks | selectattr('completed_at', 'none') | list %}
+      {% set done_tasks = invoice_tasks | rejectattr('completed_at', 'none') | list %}
+
+      {% if open_tasks %}
+      <ul style="list-style: none; padding: 0; margin: 0 0 10px;">
+        {% for t in open_tasks %}
+        <li style="display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid var(--border);">
+          <form method="POST" action="{{ url_for('invoice_task_complete', task_id=t.id) }}" style="margin-top: 2px;">
+            <button type="submit" style="background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--ink-mute);" title="Mark complete">☐</button>
+          </form>
+          <div style="flex: 1; font-size: 0.9rem;">
+            <div>{{ t.description }}</div>
+            {% if t.due_at %}<div style="font-size: 0.75rem; color: var(--ink-mute); margin-top: 2px;">Due {{ t.due_at }}</div>{% endif %}
+          </div>
+          <form method="POST" action="{{ url_for('invoice_task_delete', task_id=t.id) }}"
+                onsubmit="return confirm('Delete this task?');" style="margin-top: 2px;">
+            <button type="submit" style="background: none; border: none; cursor: pointer; color: var(--ink-mute);">×</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-state" style="margin: 0 0 10px; padding: 4px 0;">No open tasks.</p>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('invoice_task_add', invoice_id=inv.id) }}" style="display: flex; gap: 6px; align-items: flex-end;">
+        <div class="form-field" style="flex: 1;">
+          <label for="task_desc" style="font-size: 0.78rem;">Add task</label>
+          <input type="text" name="description" id="task_desc" required placeholder="e.g. Email survey request">
+        </div>
+        <div class="form-field" style="max-width: 140px;">
+          <label for="task_due" style="font-size: 0.78rem;">Due</label>
+          <input type="date" name="due_at" id="task_due">
+        </div>
+        <button type="submit" class="btn-secondary btn-tiny" style="margin-bottom: 4px;">Add</button>
+      </form>
+
+      {% if done_tasks %}
+      <details style="margin-top: 10px;">
+        <summary style="cursor: pointer; font-size: 0.82rem; color: var(--ink-mute);">Completed ({{ done_tasks|length }})</summary>
+        <ul style="list-style: none; padding: 0; margin: 6px 0 0;">
+          {% for t in done_tasks %}
+            <li style="padding: 4px 0; font-size: 0.82rem; color: var(--ink-mute); text-decoration: line-through;">{{ t.description }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </div>
+
+    {# ===== Workflow history ===== #}
+    {% if workflow_history %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Workflow History</h3>
+      <ul style="list-style: none; padding: 0; margin: 0;">
+        {% for h in workflow_history %}
+        <li style="padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;">
+          {% if h.from_status %}<span style="color: var(--ink-mute);">{{ workflow_status_label.get(h.from_status, h.from_status) }} →</span>{% endif %}
+          <strong>{{ workflow_status_label.get(h.to_status, h.to_status) }}</strong>
+          <div style="font-size: 0.74rem; color: var(--ink-mute);">{{ (h.transitioned_at or '')[:16].replace('T', ' ') }}{% if h.transitioned_by %} · {{ h.transitioned_by }}{% endif %}</div>
+          {% if h.note %}<div style="font-size: 0.82rem; margin-top: 3px; font-style: italic; color: var(--ink-mute);">{{ h.note }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <style>
+      .status-intake               { background: #eef2ff; color: #4338ca; }
+      .status-awaiting_survey,
+      .status-awaiting_engineer    { background: #fef3c7; color: #92400e; }
+      .status-permit_prep          { background: #e0f2fe; color: #075985; }
+      .status-submitted            { background: #dbeafe; color: #1e40af; }
+      .status-review_comments      { background: #fee2e2; color: #991b1b; }
+      .status-awaiting_inspection  { background: #ede9fe; color: #5b21b6; }
+      .status-inspection_failed    { background: #fee2e2; color: #991b1b; }
+      .status-approved             { background: #d1fae5; color: #065f46; }
+      .status-closed_won           { background: #d1fae5; color: #065f46; }
+      .status-closed_lost          { background: #f3f4f6; color: #4b5563; }
+    </style>
 
     {% if inv.status != 'void' %}
     <div class="lead-card">

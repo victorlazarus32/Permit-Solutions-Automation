@@ -698,10 +698,10 @@ def dashboard():
 
     lob_ok, lob_reason = _lob_ready()
 
-    # Jobs pipeline (macro view): { status_key: count } for the flow widget
-    pipeline_counts = jobs_mod.status_counts()
-    # Stuck jobs — non-terminal jobs that have outstayed their threshold
-    stuck_jobs = jobs_mod.list_stuck_jobs(limit=10)
+    # Workflow pipeline (macro view): counts of invoices in each workflow status
+    pipeline_counts = inv_mod.workflow_status_counts()
+    # Stuck invoices — non-terminal invoices that have outstayed their threshold
+    stuck_jobs = inv_mod.list_stuck_invoices(limit=10)
 
     return render_template(
         "dashboard.html",
@@ -718,8 +718,8 @@ def dashboard():
         lob_reason=lob_reason,
         today=dt.date.today().strftime("%A, %B %d, %Y"),
         today_iso=dt.date.today().isoformat(),
-        job_statuses=jobs_mod.STATUSES,
-        job_status_label=jobs_mod.STATUS_LABEL,
+        job_statuses=inv_mod.WORKFLOW_STATUSES,
+        job_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
         pipeline_counts=pipeline_counts,
         pipeline_total=sum(pipeline_counts.values()),
         stuck_jobs=stuck_jobs,
@@ -1139,7 +1139,6 @@ import invoices as inv_mod  # noqa: E402
 import contracts as contracts_mod  # noqa: E402
 import reports as reports_mod  # noqa: E402
 import scope_modules as scope_mod  # noqa: E402
-import jobs as jobs_mod  # noqa: E402
 import client_summaries as cs_mod  # noqa: E402
 from app.quotes import random_quote  # noqa: E402
 
@@ -1397,6 +1396,10 @@ def invoice_detail(invoice_id: int):
         line_items=line_items,
         today_iso=dt.date.today().isoformat(),
         attached_contract=attached_contract,
+        workflow_statuses=inv_mod.WORKFLOW_STATUSES,
+        workflow_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
+        workflow_history=inv_mod.list_workflow_history(invoice_id),
+        invoice_tasks=inv_mod.list_invoice_tasks(invoice_id),
     )
 
 
@@ -1578,190 +1581,94 @@ def contract_edit(contract_id: int):
     return render_template("contract_form.html", contract=c)
 
 
-# ===== Jobs (operational workflow / mini-CRM) =====
+# ===== Workflow + tasks (live on invoices now; Jobs merged in) =====
 
-@app.route("/jobs")
-def jobs_list():
-    status_filter = (request.args.get("status") or "").strip() or None
-    items = jobs_mod.list_jobs(status=status_filter, limit=500)
-    counts = jobs_mod.status_counts()
-    return render_template(
-        "jobs_list.html",
-        jobs=items,
-        count=len(items),
-        active_status=status_filter,
-        statuses=jobs_mod.STATUSES,
-        status_label=jobs_mod.STATUS_LABEL,
-        counts=counts,
-        open_tasks=jobs_mod.list_open_tasks_all(limit=20),
-    )
-
-
-@app.route("/jobs/board")
-def jobs_board():
-    """Kanban-style board: one column per status, job cards in each column."""
-    all_jobs = jobs_mod.list_jobs(limit=1000)
-    # Group by status for easy column rendering
-    by_status: dict[str, list[dict]] = {k: [] for k, _ in jobs_mod.STATUSES}
-    for j in all_jobs:
-        by_status.setdefault(j["status"], []).append(j)
-    return render_template(
-        "jobs_board.html",
-        by_status=by_status,
-        statuses=jobs_mod.STATUSES,
-        status_label=jobs_mod.STATUS_LABEL,
-        total=len(all_jobs),
-    )
-
-
-@app.route("/jobs/new", methods=["GET", "POST"])
-def job_new():
-    # Optional prefill from a violation (?case=source|CASE_NUMBER)
-    prefill: dict = {}
-    case_key = (request.args.get("case") or "").strip()
-    if case_key and "|" in case_key:
-        src, cn = case_key.split("|", 1)
-        try:
-            p = inv_mod.prefill_from_case(src, cn)
-            prefill = {
-                "client_name":      p.get("client_name") or "",
-                "client_phone":     p.get("client_phone") or "",
-                "client_email":     p.get("client_email") or "",
-                "property_address": p.get("property_address") or "",
-                "source":           src,
-                "case_number":      cn,
-            }
-        except LookupError as e:
-            flash(str(e), "error")
-
-    if request.method == "POST":
-        f = request.form
-        try:
-            j = jobs_mod.create_job(
-                client_name=(f.get("client_name") or "").strip(),
-                client_phone=_fs(f, "client_phone"),
-                client_email=_fs(f, "client_email"),
-                property_address=_fs(f, "property_address"),
-                source=_fs(f, "source"),
-                case_number=_fs(f, "case_number"),
-                notes=_fs(f, "notes"),
-                initial_status=(f.get("status") or "intake").strip(),
-                initial_by=session.get("user"),
-            )
-        except ValueError as e:
-            flash(str(e), "error")
-            return redirect(request.url)
-        flash(f"Created job {j['job_number']}.", "success")
-        return redirect(url_for("job_detail", job_id=j["id"]))
-
-    return render_template(
-        "job_form.html",
-        job=None,
-        prefill=prefill,
-        statuses=jobs_mod.STATUSES,
-    )
-
-
-@app.route("/jobs/<int:job_id>")
-def job_detail(job_id: int):
-    j = jobs_mod.get_job(job_id)
-    if not j:
-        flash("Job not found.", "error")
-        return redirect(url_for("jobs_list"))
-    # If a closing invoice is linked to this job (Phase 3), surface it.
-    linked_invoice = None
-    if j.get("invoice_id"):
-        try:
-            linked_invoice = inv_mod.get_invoice(j["invoice_id"])
-        except Exception:
-            linked_invoice = None
-    return render_template(
-        "job_detail.html",
-        job=j,
-        tasks=jobs_mod.list_tasks(job_id),
-        history=jobs_mod.list_status_history(job_id),
-        statuses=jobs_mod.STATUSES,
-        status_label=jobs_mod.STATUS_LABEL,
-        linked_invoice=linked_invoice,
-    )
-
-
-@app.post("/jobs/<int:job_id>/status")
-def job_transition_status(job_id: int):
+@app.post("/invoices/<int:invoice_id>/workflow")
+def invoice_workflow_transition(invoice_id: int):
     f = request.form
     to_status = (f.get("to_status") or "").strip()
     note      = _fs(f, "note")
     skip_auto = bool(f.get("skip_auto_tasks"))
     try:
-        j = jobs_mod.transition_status(
-            job_id, to_status=to_status,
-            by=session.get("user"), note=note,
-            skip_auto_tasks=skip_auto,
+        inv = inv_mod.transition_workflow(
+            invoice_id, to_status=to_status,
+            by=session.get("user"), note=note, skip_auto_tasks=skip_auto,
         )
     except (ValueError, LookupError) as e:
         flash(str(e), "error")
-        return redirect(url_for("job_detail", job_id=job_id))
-
-    label = jobs_mod.STATUS_LABEL.get(to_status, to_status)
-    auto_count = 0 if skip_auto else len(jobs_mod.STATUS_AUTO_TASKS.get(to_status, []))
-    extra = ""
-    # Phase 3 auto-invoice: if the transition created a closing invoice,
-    # surface its number in the flash so the user can jump to it.
-    if not skip_auto and to_status == "approved" and j.get("invoice_id"):
-        try:
-            inv = inv_mod.get_invoice(j["invoice_id"])
-            extra = f" Draft closing invoice {inv['invoice_number']} created — fill in the final amount before sending."
-        except Exception:
-            pass
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    label = inv_mod.WORKFLOW_STATUS_LABEL.get(to_status, to_status)
+    auto_count = 0 if skip_auto else len(inv_mod.WORKFLOW_AUTO_TASKS.get(to_status, []))
     if auto_count:
-        flash(f"Job {j['job_number']} moved to {label} — {auto_count} follow-up task(s) added automatically.{extra}", "success")
+        flash(f"Invoice {inv['invoice_number']} workflow → {label} — {auto_count} follow-up task(s) added.", "success")
     else:
-        flash(f"Job {j['job_number']} moved to {label}.{extra}", "success")
-    return redirect(url_for("job_detail", job_id=job_id))
+        flash(f"Invoice {inv['invoice_number']} workflow → {label}.", "success")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
 
-@app.post("/jobs/<int:job_id>/tasks")
-def job_task_add(job_id: int):
+@app.post("/invoices/<int:invoice_id>/tasks")
+def invoice_task_add(invoice_id: int):
     f = request.form
     try:
-        jobs_mod.add_task(
-            job_id,
+        inv_mod.add_invoice_task(
+            invoice_id,
             description=(f.get("description") or "").strip(),
             due_at=_fs(f, "due_at"),
             assigned_to=_fs(f, "assigned_to"),
         )
     except (ValueError, LookupError) as e:
         flash(str(e), "error")
-    return redirect(url_for("job_detail", job_id=job_id))
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
 
-@app.post("/jobs/tasks/<int:task_id>/complete")
-def job_task_complete(task_id: int):
+@app.post("/invoices/tasks/<int:task_id>/complete")
+def invoice_task_complete(task_id: int):
     try:
-        t = jobs_mod.complete_task(task_id, by=session.get("user"))
+        t = inv_mod.complete_invoice_task(task_id, by=session.get("user"))
     except LookupError as e:
         flash(str(e), "error")
-        return redirect(url_for("jobs_list"))
-    return redirect(url_for("job_detail", job_id=t["job_id"]))
+        return redirect(url_for("invoices_list"))
+    return redirect(url_for("invoice_detail", invoice_id=t["invoice_id"]))
 
 
-@app.post("/jobs/tasks/<int:task_id>/reopen")
-def job_task_reopen(task_id: int):
+@app.post("/invoices/tasks/<int:task_id>/reopen")
+def invoice_task_reopen(task_id: int):
     try:
-        t = jobs_mod.reopen_task(task_id)
+        t = inv_mod.reopen_invoice_task(task_id)
     except LookupError as e:
         flash(str(e), "error")
-        return redirect(url_for("jobs_list"))
-    return redirect(url_for("job_detail", job_id=t["job_id"]))
+        return redirect(url_for("invoices_list"))
+    return redirect(url_for("invoice_detail", invoice_id=t["invoice_id"]))
 
 
-@app.post("/jobs/tasks/<int:task_id>/delete")
-def job_task_delete(task_id: int):
-    t = jobs_mod._get_task(task_id)  # private but useful here
-    jobs_mod.delete_task(task_id)
+@app.post("/invoices/tasks/<int:task_id>/delete")
+def invoice_task_delete(task_id: int):
+    t = inv_mod._get_invoice_task(task_id)
+    inv_mod.delete_invoice_task(task_id)
     if t:
-        return redirect(url_for("job_detail", job_id=t["job_id"]))
-    return redirect(url_for("jobs_list"))
+        return redirect(url_for("invoice_detail", invoice_id=t["invoice_id"]))
+    return redirect(url_for("invoices_list"))
+
+
+# ===== DEPRECATED Jobs routes — redirect to the equivalent invoices view =====
+# Kept temporarily so any saved bookmarks don't 404.
+
+@app.route("/jobs")
+@app.route("/jobs/board")
+def _deprecated_jobs_redirect():
+    return redirect(url_for("invoices_list"))
+
+
+@app.route("/jobs/new")
+def _deprecated_job_new_redirect():
+    case_arg = request.args.get("case", "")
+    return redirect(url_for("invoice_new") + (f"?case={case_arg}" if case_arg else ""))
+
+
+# (The old /jobs/<id>/... routes below this point have been removed; the
+# new workflow + task routes above this comment live under /invoices/.)
+
+
 
 
 @app.post("/contracts/<int:contract_id>/delete")

@@ -26,12 +26,67 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from db import connect
+
+
+# ===== Workflow status machine (was the Jobs feature) =====
+# Every invoice carries BOTH a billing status (draft/sent/paid/void) and
+# a workflow status (the permit operations lifecycle). They progress
+# independently — billing tracks money, workflow tracks the engagement.
+
+WORKFLOW_STATUSES: list[tuple[str, str]] = [
+    ("intake",              "Intake"),
+    ("awaiting_survey",     "Awaiting Survey"),
+    ("awaiting_engineer",   "Awaiting Engineer"),
+    ("permit_prep",         "Permit Prep"),
+    ("submitted",           "Submitted"),
+    ("review_comments",     "Review Comments"),
+    ("awaiting_inspection", "Awaiting Inspection"),
+    ("inspection_failed",   "Inspection Failed"),
+    ("approved",            "Approved"),
+    ("closed_won",          "Closed (Won)"),
+    ("closed_lost",         "Closed (Lost)"),
+]
+WORKFLOW_STATUS_LABEL = dict(WORKFLOW_STATUSES)
+WORKFLOW_STATUS_KEYS  = [k for k, _ in WORKFLOW_STATUSES]
+WORKFLOW_TERMINAL     = {"closed_won", "closed_lost"}
+
+# When the workflow moves INTO this status, auto-create these tasks
+# (each prefixed with "[auto]" and due N days from today).
+WORKFLOW_AUTO_TASKS: dict[str, list[dict]] = {
+    "awaiting_survey":     [{"description": "Email client requesting survey",                "due_in_days": 1}],
+    "awaiting_engineer":   [{"description": "Send case packet to engineer",                  "due_in_days": 2},
+                            {"description": "Follow up with engineer on ETA",                "due_in_days": 5}],
+    "permit_prep":         [{"description": "Compile permit application package",            "due_in_days": 3}],
+    "submitted":           [{"description": "Follow up with city on review status",          "due_in_days": 5}],
+    "review_comments":     [{"description": "Draft response to city review comments",        "due_in_days": 3}],
+    "awaiting_inspection": [{"description": "Confirm inspection date with client",           "due_in_days": 1}],
+    "inspection_failed":   [{"description": "Send deficiency notice to client",              "due_in_days": 1},
+                            {"description": "Re-prepare submittal addressing deficiencies",  "due_in_days": 3}],
+    "approved":            [{"description": "Send close-out package to client",              "due_in_days": 2},
+                            {"description": "Generate closing invoice for final payment",    "due_in_days": 1}],
+    "closed_won":          [{"description": "Email client thank-you + ask for Google review","due_in_days": 1}],
+}
+AUTO_TASK_PREFIX = "[auto] "
+
+# Per-status "stuck" thresholds — how many days before showing on stuck-list
+WORKFLOW_STUCK_THRESHOLDS_DAYS: dict[str, int] = {
+    "intake":               3,
+    "awaiting_survey":      7,
+    "awaiting_engineer":    10,
+    "permit_prep":          5,
+    "submitted":            14,
+    "review_comments":      7,
+    "awaiting_inspection":  14,
+    "inspection_failed":    7,
+    "approved":             7,
+}
 
 
 # Multi-word South Florida city names we want to recognize when splitting a
@@ -279,6 +334,17 @@ def create_invoice(
             },
         )
         inv_id = cur.lastrowid
+        # Workflow init — start in 'intake' and seed the history row.
+        conn.execute(
+            "UPDATE invoices SET workflow_opened_at = ?, workflow_status = 'intake' WHERE id = ?",
+            (now, inv_id),
+        )
+        conn.execute(
+            "INSERT INTO invoice_workflow_history "
+            "(invoice_id, from_status, to_status, transitioned_at, transitioned_by, note) "
+            "VALUES (?, NULL, 'intake', ?, NULL, 'Invoice created')",
+            (inv_id, now),
+        )
     return get_invoice(inv_id)
 
 
@@ -573,3 +639,229 @@ def prefill_from_case(source: str, case_number: str) -> dict:
             f"({v['property_address'] or 'property work'})"
         ),
     }
+
+
+# ============================================================
+# Workflow + tasks (formerly the Jobs feature, now merged in)
+# ============================================================
+
+def workflow_status_counts() -> dict:
+    """{status_key: count} of invoices in each workflow status."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT workflow_status, COUNT(*) AS n FROM invoices "
+            "WHERE status <> 'void' GROUP BY workflow_status"
+        ).fetchall()
+    return {r[0]: r[1] for r in rows}
+
+
+def list_by_workflow_status(workflow_status: str | None = None, limit: int = 500) -> list[dict]:
+    """Invoices filtered by workflow status (omit to get all non-void)."""
+    sql = "SELECT * FROM invoices WHERE status <> 'void'"
+    params: list = []
+    if workflow_status:
+        sql += " AND workflow_status = ?"
+        params.append(workflow_status)
+    sql += " ORDER BY workflow_status ASC, updated_at DESC LIMIT ?"
+    params.append(int(limit))
+    with connect() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def transition_workflow(invoice_id: int, *, to_status: str,
+                        by: str | None = None, note: str | None = None,
+                        skip_auto_tasks: bool = False) -> dict:
+    """Move the invoice's workflow to a new status; log history; auto-tasks."""
+    if to_status not in WORKFLOW_STATUS_LABEL:
+        raise ValueError(f"Unknown workflow status: {to_status!r}")
+    existing = get_invoice(invoice_id)
+    if not existing:
+        raise LookupError(f"Invoice {invoice_id} not found.")
+    from_status = existing["workflow_status"] or "intake"
+    if from_status == to_status:
+        return existing
+
+    now = _now()
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO invoice_workflow_history "
+            "(invoice_id, from_status, to_status, transitioned_at, transitioned_by, note) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (invoice_id, from_status, to_status, now, by, note),
+        )
+        closed_clause = ""
+        if to_status in WORKFLOW_TERMINAL:
+            closed_clause = ", workflow_closed_at = :now"
+        elif from_status in WORKFLOW_TERMINAL:
+            closed_clause = ", workflow_closed_at = NULL"
+        conn.execute(
+            f"UPDATE invoices SET workflow_status = :s, updated_at = :now {closed_clause} "
+            f"WHERE id = :id",
+            {"s": to_status, "now": now, "id": invoice_id},
+        )
+
+    if not skip_auto_tasks:
+        _seed_workflow_auto_tasks(invoice_id, to_status)
+
+    return get_invoice(invoice_id)
+
+
+def list_workflow_history(invoice_id: int) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM invoice_workflow_history WHERE invoice_id = ? "
+            "ORDER BY transitioned_at DESC",
+            (invoice_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------- Tasks (per-invoice) ----------
+
+def list_invoice_tasks(invoice_id: int, *, include_completed: bool = True) -> list[dict]:
+    sql = "SELECT * FROM invoice_tasks WHERE invoice_id = ?"
+    if not include_completed:
+        sql += " AND completed_at IS NULL"
+    sql += " ORDER BY (completed_at IS NOT NULL), COALESCE(due_at, created_at) ASC"
+    with connect() as conn:
+        rows = conn.execute(sql, (invoice_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_all_open_tasks(limit: int = 200) -> list[dict]:
+    """All open tasks across all invoices — for a daily 'what needs doing' view."""
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT t.*, i.invoice_number, i.client_name, i.workflow_status
+              FROM invoice_tasks t
+              JOIN invoices i ON i.id = t.invoice_id
+             WHERE t.completed_at IS NULL
+             ORDER BY COALESCE(t.due_at, t.created_at) ASC
+             LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_invoice_task(invoice_id: int, *, description: str,
+                     due_at: str | None = None, assigned_to: str | None = None) -> dict:
+    description = (description or "").strip()
+    if not description:
+        raise ValueError("Task description is required.")
+    if not get_invoice(invoice_id):
+        raise LookupError(f"Invoice {invoice_id} not found.")
+    now = _now()
+    with connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO invoice_tasks (invoice_id, description, due_at, assigned_to, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (invoice_id, description, due_at or None, assigned_to or None, now),
+        )
+        task_id = cur.lastrowid
+        conn.execute("UPDATE invoices SET updated_at = ? WHERE id = ?", (now, invoice_id))
+    return _get_invoice_task(task_id)  # type: ignore[return-value]
+
+
+def complete_invoice_task(task_id: int, *, by: str | None = None) -> dict:
+    now = _now()
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE invoice_tasks SET completed_at = ?, completed_by = ? "
+            "WHERE id = ? AND completed_at IS NULL",
+            (now, by, task_id),
+        )
+        if cur.rowcount == 0:
+            existing = _get_invoice_task(task_id)
+            if not existing:
+                raise LookupError(f"Task {task_id} not found.")
+            return existing
+    return _get_invoice_task(task_id)  # type: ignore[return-value]
+
+
+def reopen_invoice_task(task_id: int) -> dict:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE invoice_tasks SET completed_at = NULL, completed_by = NULL WHERE id = ?",
+            (task_id,),
+        )
+    return _get_invoice_task(task_id)  # type: ignore[return-value]
+
+
+def delete_invoice_task(task_id: int) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM invoice_tasks WHERE id = ?", (task_id,))
+
+
+def _get_invoice_task(task_id: int) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM invoice_tasks WHERE id = ?", (task_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def _seed_workflow_auto_tasks(invoice_id: int, status_key: str) -> int:
+    """Create auto-tasks for this workflow status; skip already-open ones."""
+    specs = WORKFLOW_AUTO_TASKS.get(status_key) or []
+    if not specs:
+        return 0
+    open_descs = {
+        (t["description"] or "").strip()
+        for t in list_invoice_tasks(invoice_id, include_completed=False)
+    }
+    created = 0
+    today = date.today()
+    for spec in specs:
+        desc = f"{AUTO_TASK_PREFIX}{spec['description']}"
+        if desc in open_descs:
+            continue
+        due = (today + timedelta(days=int(spec.get("due_in_days") or 0))).isoformat()
+        try:
+            add_invoice_task(invoice_id, description=desc, due_at=due)
+            created += 1
+        except (ValueError, LookupError):
+            pass
+    return created
+
+
+def list_stuck_invoices(limit: int = 50) -> list[dict]:
+    """
+    Non-terminal invoices that have been in their current workflow status
+    longer than WORKFLOW_STUCK_THRESHOLDS_DAYS allows. Sorted most-stuck first.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT i.*,
+                   (SELECT MAX(h.transitioned_at) FROM invoice_workflow_history h
+                     WHERE h.invoice_id = i.id AND h.to_status = i.workflow_status) AS entered_status_at
+              FROM invoices i
+             WHERE i.workflow_status NOT IN ('closed_won', 'closed_lost')
+               AND i.status <> 'void'
+            """
+        ).fetchall()
+
+    today = datetime.now(timezone.utc)
+    out: list[dict] = []
+    for r in rows:
+        threshold = WORKFLOW_STUCK_THRESHOLDS_DAYS.get(r["workflow_status"])
+        if threshold is None:
+            continue
+        entered = r["entered_status_at"] or r["workflow_opened_at"] or r["created_at"]
+        if not entered:
+            continue
+        try:
+            entered_dt = datetime.fromisoformat(entered.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            continue
+        days = (today - entered_dt).days
+        if days < threshold:
+            continue
+        d = dict(r)
+        d["entered_status_at"] = entered
+        d["days_in_status"] = days
+        d["threshold_days"] = threshold
+        out.append(d)
+    out.sort(key=lambda d: d["days_in_status"], reverse=True)
+    return out[:limit]

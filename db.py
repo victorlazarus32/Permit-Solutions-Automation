@@ -328,6 +328,39 @@ CREATE TABLE IF NOT EXISTS job_tasks (
 );
 
 CREATE INDEX IF NOT EXISTS ix_job_tasks_open ON job_tasks(job_id, completed_at);
+
+-- ===== Workflow on invoices (formerly the Jobs feature) =====
+-- We unified Jobs into Invoices: every engagement is now a single Invoice
+-- record that carries BOTH billing state (status: draft/sent/paid/void)
+-- AND workflow state (workflow_status: intake/permit_prep/submitted/etc.).
+-- These two tables are the invoice-keyed counterparts of the now-deprecated
+-- job_tasks and job_status_history.
+CREATE TABLE IF NOT EXISTS invoice_tasks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id      INTEGER NOT NULL,
+    description     TEXT NOT NULL,
+    due_at          TEXT,
+    assigned_to     TEXT,
+    completed_at    TEXT,
+    completed_by    TEXT,
+    created_at      TEXT NOT NULL,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_invoice_tasks_open ON invoice_tasks(invoice_id, completed_at);
+
+CREATE TABLE IF NOT EXISTS invoice_workflow_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id      INTEGER NOT NULL,
+    from_status     TEXT,
+    to_status       TEXT NOT NULL,
+    transitioned_at TEXT NOT NULL,
+    transitioned_by TEXT,
+    note            TEXT,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_invoice_workflow_hist ON invoice_workflow_history(invoice_id, transitioned_at DESC);
 """
 
 
@@ -382,10 +415,20 @@ def _migrate_invoices(conn) -> None:
         ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
         ("scope_of_services", "TEXT"),                    # assembled scope text for this invoice
         ("client_summary",    "TEXT"),                    # plain-English "what this means" blurb for the client
+        ("workflow_status",   "TEXT NOT NULL DEFAULT 'intake'"),  # permit workflow stage (formerly the Job's status)
+        ("workflow_opened_at","TEXT"),                    # when this engagement entered the workflow
+        ("workflow_closed_at","TEXT"),                    # when the workflow reached a terminal state
     ]
     for col, ddl in additions:
         if col not in existing:
             conn.execute(f"ALTER TABLE invoices ADD COLUMN {col} {ddl}")
+    # Backfill workflow_opened_at for invoices that pre-date the workflow
+    # feature — use the invoice's created_at so reports have a sensible
+    # "in this status for N days" baseline.
+    conn.execute(
+        "UPDATE invoices SET workflow_opened_at = created_at "
+        "WHERE workflow_opened_at IS NULL"
+    )
 
 
 # Columns we accept on upsert (everything except lob_* which is set later)

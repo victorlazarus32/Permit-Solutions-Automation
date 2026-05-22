@@ -153,7 +153,6 @@
       <p class="empty-inline">No invoices yet for this case.</p>
       {% endif %}
       <a class="btn btn-secondary lead-card-cta" href="{{ url_for('invoice_new') }}?case={{ v.source }}|{{ v.case_number }}">+ Create invoice</a>
-      <a class="btn btn-secondary lead-card-cta" href="{{ url_for('job_new') }}?case={{ v.source }}|{{ v.case_number }}">+ Start job</a>
       <style>
         .invoice-mini-list { list-style: none; padding: 0; margin: 0 0 8px 0; }
         .invoice-mini-list li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

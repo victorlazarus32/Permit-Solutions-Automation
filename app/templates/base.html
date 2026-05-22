@@ -76,7 +76,6 @@
     <a href="{{ url_for('reports') }}"   {% if request.endpoint == 'reports'   %}class="active"{% endif %}>Reports</a>
     <a href="{{ url_for('pipeline') }}"  {% if request.endpoint == 'pipeline'  %}class="active"{% endif %}>Pipeline</a>
     <a href="{{ url_for('invoices_list') }}" {% if request.endpoint and request.endpoint.startswith('invoice') %}class="active"{% endif %}>Invoices</a>
-    <a href="{{ url_for('jobs_list') }}"     {% if request.endpoint and request.endpoint.startswith('job') %}class="active"{% endif %}>Jobs</a>
     <a href="{{ url_for('settings') }}"  {% if request.endpoint and (request.endpoint == 'settings' or request.endpoint.startswith('contract') or request.endpoint.startswith('scope_module')) %}class="active"{% endif %}>Settings</a>
   </nav>
 
