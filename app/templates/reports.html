@@ -133,4 +133,65 @@
 </div>
 {% endif %}
 
+{# ===== Daily auto-runs (from Render cron) ===== #}
+{% if daily_runs %}
+<div class="lead-card" style="margin-top: 1.25rem;">
+  <h3 class="lead-card-title">
+    Daily Auto-Runs
+    <span style="font-weight: 400; color: var(--ink-mute); font-size: 0.85rem;">
+      — scripts/daily_run.py · last {{ daily_runs|length }} executions
+    </span>
+  </h3>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Started</th>
+        <th>Status</th>
+        <th class="num">Homestead pulled / in-scope / new</th>
+        <th class="num">Miami-Dade pulled / in-scope / new</th>
+        <th class="num">Letters sent</th>
+        <th>Auto-send</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in daily_runs %}
+      <tr>
+        <td class="mono" style="font-size: 0.85rem;">{{ (r.started_at or '')[:16].replace('T', ' ') }}</td>
+        <td>
+          {% if r.status == 'success' %}
+            <span class="status status-mailed">success</span>
+          {% elif r.status == 'partial' %}
+            <span class="status status-warning">partial</span>
+          {% elif r.status == 'failed' %}
+            <span class="status status-error">failed</span>
+          {% else %}
+            <span class="status">{{ r.status }}</span>
+          {% endif %}
+        </td>
+        <td class="num">{{ r.homestead_pulled }} / {{ r.homestead_in_scope }} / {{ r.homestead_inserted }}</td>
+        <td class="num">{{ r.md_pulled }} / {{ r.md_in_scope }} / {{ r.md_inserted }}</td>
+        <td class="num">{{ r.letters_sent }}{% if r.letters_failed %} <span style="color: var(--red);">({{ r.letters_failed }} failed)</span>{% endif %}</td>
+        <td>{% if r.auto_send_enabled %}ON{% else %}off{% endif %}</td>
+      </tr>
+      {% if r.error_text %}
+      <tr>
+        <td colspan="6" style="background: rgba(220, 38, 38, 0.05); font-size: 0.82rem; color: var(--ink-mute);">
+          <strong>Error:</strong> <span class="mono">{{ r.error_text[:240] }}{% if r.error_text|length > 240 %}…{% endif %}</span>
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="lead-card" style="margin-top: 1.25rem;">
+  <h3 class="lead-card-title">Daily Auto-Runs</h3>
+  <p class="empty-state" style="margin: 0; padding: 8px 0;">
+    No automated runs yet. Set up a Render Cron Job pointing at
+    <span class="mono">python -m scripts.daily_run</span> (see the script's docstring for the exact Render configuration).
+  </p>
+</div>
+{% endif %}
+
 {% endblock %}

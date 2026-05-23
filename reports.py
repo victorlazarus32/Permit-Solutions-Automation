@@ -169,3 +169,13 @@ def default_window(days: int = 30) -> tuple[str, str]:
     """Convenience: (since_iso, until_iso) for the last N days inclusive."""
     today = date.today()
     return ((today - timedelta(days=days - 1)).isoformat(), today.isoformat())
+
+
+def recent_daily_runs(limit: int = 14) -> list[dict]:
+    """Most recent daily_runs rows for the Reports page."""
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM daily_runs ORDER BY started_at DESC LIMIT ?",
+            (int(limit),),
+        ).fetchall()
+    return [dict(r) for r in rows]

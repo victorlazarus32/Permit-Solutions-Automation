@@ -1814,6 +1814,7 @@ def reports():
         per_day=per_day,
         recent=recent,
         recent_limit=recent_limit,
+        daily_runs=reports_mod.recent_daily_runs(limit=14),
     )
 
 

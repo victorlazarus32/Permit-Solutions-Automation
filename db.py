@@ -361,6 +361,32 @@ CREATE TABLE IF NOT EXISTS invoice_workflow_history (
 );
 
 CREATE INDEX IF NOT EXISTS ix_invoice_workflow_hist ON invoice_workflow_history(invoice_id, transitioned_at DESC);
+
+-- ===== Daily-run audit trail =====
+-- One row per execution of scripts/daily_run.py (the Render cron job).
+-- Lets the operator see at a glance "did the morning run actually fire,
+-- what did it pull, what did it send" without trawling Render logs.
+CREATE TABLE IF NOT EXISTS daily_runs (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at           TEXT NOT NULL,
+    finished_at          TEXT,
+    status               TEXT NOT NULL,            -- 'success' | 'partial' | 'failed'
+    homestead_pulled     INTEGER NOT NULL DEFAULT 0,    -- raw rows Tyler returned
+    homestead_in_scope   INTEGER NOT NULL DEFAULT 0,
+    homestead_inserted   INTEGER NOT NULL DEFAULT 0,
+    md_pulled            INTEGER NOT NULL DEFAULT 0,    -- raw rows MD scraper returned
+    md_in_scope          INTEGER NOT NULL DEFAULT 0,
+    md_inserted          INTEGER NOT NULL DEFAULT 0,
+    letters_eligible     INTEGER NOT NULL DEFAULT 0,
+    letters_sent         INTEGER NOT NULL DEFAULT 0,
+    letters_skipped      INTEGER NOT NULL DEFAULT 0,
+    letters_failed       INTEGER NOT NULL DEFAULT 0,
+    auto_send_enabled    INTEGER NOT NULL DEFAULT 0,
+    error_text           TEXT,                      -- top-level traceback if status != success
+    summary_text         TEXT                       -- the human-readable report we'd email
+);
+
+CREATE INDEX IF NOT EXISTS ix_daily_runs_started ON daily_runs(started_at DESC);
 """
 
 
