@@ -40,6 +40,7 @@ from typing import Any
 
 from db import connect, init_db
 from lob_sender.derive import derive_for_row
+from lob_sender.verify import verify_us_address
 
 # Load .env from the project root when send.py is invoked directly
 # (morning_run.py also loads it, so calls through the morning button are
@@ -164,6 +165,28 @@ def update_lob_state(
         )
 
 
+def update_verification_state(
+    *,
+    source: str,
+    case_number: str,
+    deliverability: str | None,
+    error: str | None,
+) -> None:
+    """Record the result of a Lob US address verification call."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE violations
+            SET lob_address_deliverability = ?,
+                lob_address_verified_at    = ?,
+                lob_address_verify_error   = ?
+            WHERE source = ? AND case_number = ?
+            """,
+            (deliverability, now, error, source, case_number),
+        )
+
+
 # ---------- Build the Lob payload ----------
 
 def _load_template_html() -> str:
@@ -243,6 +266,9 @@ def send_batch(
     # the letterhead.
     address_placement = os.environ.get("LOB_ADDRESS_PLACEMENT",
                                         "insert_blank_page")
+    # Pre-flight address verification (default ON: ~$0.0075 saves a $1.50 letter
+    # if undeliverable). Set LOB_VERIFY_ADDRESSES=false to disable.
+    verify_addresses = os.environ.get("LOB_VERIFY_ADDRESSES", "true").lower() == "true"
 
     if not dry_run:
         if not api_key:
@@ -295,6 +321,38 @@ def send_batch(
             })
             _report("skipped", row)
             continue
+
+        # Pre-flight Lob US address verification — runs on real sends only.
+        # We always record the result; we only act on an "undeliverable" verdict.
+        # Verifier errors (API down, rate-limited) fail open: we still mail.
+        if verify_addresses and not dry_run:
+            verify = verify_us_address(derived["to_address"], api_key=api_key)
+            update_verification_state(
+                source=row["source"],
+                case_number=row["case_number"],
+                deliverability=verify["deliverability"],
+                error=verify["error"],
+            )
+            if verify["deliverability"] == "undeliverable":
+                skipped += 1
+                log.warning(
+                    "[%s/%s] SKIP — Lob says undeliverable",
+                    row["source"], row["case_number"],
+                )
+                results.append({
+                    "source": row["source"],
+                    "case_number": row["case_number"],
+                    "status": "skipped",
+                    "errors": ["undeliverable_address"],
+                })
+                _report("skipped", row)
+                continue
+            # Use Lob's corrected components (USPS-normalized) when we got them.
+            if verify["corrected"]:
+                derived["to_address"] = {
+                    "name": derived["to_address"]["name"],
+                    **verify["corrected"],
+                }
 
         payload = _build_letter_payload(
             row=row,

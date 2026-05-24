@@ -17,6 +17,7 @@
       <th data-sort="addr">Property Address</th>
       <th data-sort="owner">Owner</th>
       <th>Matched Keywords</th>
+      <th>Address Check</th>
       <th>Violation Summary</th>
       <th class="col-actions">Actions</th>
     </tr>
@@ -32,6 +33,18 @@
       <td>
         {% if r.matched_keywords %}
           {% for kw in r.matched_keywords.split(',') %}<span class="kw-chip">{{ kw }}</span>{% endfor %}
+        {% endif %}
+      </td>
+      <td>
+        {% set dlv = r.lob_address_deliverability %}
+        {% if not dlv %}
+          <span class="status" title="Not yet verified — runs at send time">unchecked</span>
+        {% elif dlv == 'deliverable' %}
+          <span class="status status-mailed" title="USPS-confirmed">deliverable</span>
+        {% elif dlv == 'undeliverable' %}
+          <span class="status status-error" title="Lob says USPS would return this — fix or skip">undeliverable</span>
+        {% else %}
+          <span class="status status-warning" title="{{ dlv.replace('_', ' ') }}">{{ dlv.replace('deliverable_', '').replace('_', ' ') }}</span>
         {% endif %}
       </td>
       <td class="cell-narrative">{{ (r.alleged_violation or '')[:200] }}{% if r.alleged_violation and r.alleged_violation|length > 200 %}...{% endif %}</td>

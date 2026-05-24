@@ -409,6 +409,20 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         _migrate_lead_intakes(conn)
         _migrate_invoices(conn)
+        _migrate_violations(conn)
+
+
+def _migrate_violations(conn) -> None:
+    """Idempotent column adds for the violations table (Lob address verification)."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(violations)")}
+    additions = [
+        ("lob_address_deliverability", "TEXT"),  # 'deliverable' | 'undeliverable' | etc.
+        ("lob_address_verified_at",    "TEXT"),  # ISO timestamp of last verify call
+        ("lob_address_verify_error",   "TEXT"),  # last error string when verify failed
+    ]
+    for col, ddl in additions:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE violations ADD COLUMN {col} {ddl}")
 
 
 def _migrate_lead_intakes(conn) -> None:

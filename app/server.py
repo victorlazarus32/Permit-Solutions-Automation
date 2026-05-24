@@ -283,7 +283,8 @@ def _ready_rows(limit: int = 500) -> list[dict]:
                 """
                 SELECT source, case_number, open_date, property_address,
                        owner_full_name, owner_mailing_address,
-                       matched_keywords, alleged_violation
+                       matched_keywords, alleged_violation,
+                       lob_address_deliverability, lob_address_verified_at
                 FROM violations
                 WHERE owner_mailing_address IS NOT NULL
                   AND owner_full_name      IS NOT NULL
