@@ -289,6 +289,7 @@ def _ready_rows(limit: int = 500) -> list[dict]:
                 WHERE owner_mailing_address IS NOT NULL
                   AND owner_full_name      IS NOT NULL
                   AND lob_letter_id        IS NULL
+                  AND (do_not_mail IS NULL OR do_not_mail = 0)
                   AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
                 ORDER BY open_date DESC, case_number DESC
                 LIMIT ?
@@ -1977,6 +1978,40 @@ def action_send():
         flash(f"Sending letters opened on or after {since_open_date}. "
               "The beacon up top tracks progress live.", "info")
     return redirect(url_for("dashboard"))
+
+
+@app.post("/actions/queue/remove/<source>/<case_number>")
+def action_queue_remove(source: str, case_number: str):
+    """Soft-skip a queued letter — keeps the violation row, removes it from the queue."""
+    reason = (request.form.get("reason") or "").strip() or None
+    now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.execute(
+            "UPDATE violations SET do_not_mail = 1, do_not_mail_reason = ?, do_not_mail_at = ? "
+            "WHERE source = ? AND case_number = ?",
+            (reason, now, source, case_number),
+        )
+        conn.commit()
+    if cur.rowcount:
+        flash(f"Removed {case_number} from the mail queue. It stays on file in case you want to restore it.",
+              "success")
+    else:
+        flash(f"No row found for {source}/{case_number}.", "error")
+    return redirect(request.referrer or url_for("queue"))
+
+
+@app.post("/actions/queue/restore/<source>/<case_number>")
+def action_queue_restore(source: str, case_number: str):
+    """Undo a remove — clears the do_not_mail flag so the row returns to the queue."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "UPDATE violations SET do_not_mail = 0, do_not_mail_reason = NULL, do_not_mail_at = NULL "
+            "WHERE source = ? AND case_number = ?",
+            (source, case_number),
+        )
+        conn.commit()
+    flash(f"Restored {case_number} to the mail queue.", "success")
+    return redirect(request.referrer or url_for("queue"))
 
 
 @app.post("/actions/verify-queue")

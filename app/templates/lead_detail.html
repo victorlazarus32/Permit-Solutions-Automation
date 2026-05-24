@@ -78,8 +78,24 @@
         {% if v.lob_delivered_at %}<div class="kv"><span class="k">Delivered</span><span class="v">{{ v.lob_delivered_at }}</span></div>{% endif %}
         <div class="kv"><span class="k">Last Event</span><span class="v">{{ v.lob_last_event_at or '—' }}</span></div>
       </div>
+      {% elif v.do_not_mail %}
+      <p class="empty-inline" style="color: var(--ink-mute);">
+        <strong>Removed from queue</strong>{% if v.do_not_mail_at %} on {{ v.do_not_mail_at[:10] }}{% endif %}.
+        {% if v.do_not_mail_reason %}<br><em>Reason:</em> {{ v.do_not_mail_reason }}{% endif %}
+      </p>
+      <form method="POST"
+            action="{{ url_for('action_queue_restore', source=v.source, case_number=v.case_number) }}"
+            style="margin-top: 8px;">
+        <button type="submit" class="btn-secondary btn-tiny">Restore to queue</button>
+      </form>
       {% else %}
       <p class="empty-inline">This case has not been mailed yet. It is in the Letter Queue.</p>
+      <form method="POST"
+            action="{{ url_for('action_queue_remove', source=v.source, case_number=v.case_number) }}"
+            style="margin-top: 8px;"
+            onsubmit="return confirm('Remove {{ v.case_number }} from the mail queue?\n\nThe record stays on file — you can restore it from this page.');">
+        <button type="submit" class="btn-secondary btn-tiny">Remove from queue</button>
+      </form>
       {% endif %}
     </div>
 

@@ -62,6 +62,15 @@
       <td class="cell-narrative">{{ (r.alleged_violation or '')[:200] }}{% if r.alleged_violation and r.alleged_violation|length > 200 %}...{% endif %}</td>
       <td class="col-actions">
         <a class="btn btn-secondary btn-tiny" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">Open</a>
+        <form method="POST"
+              action="{{ url_for('action_queue_remove', source=r.source, case_number=r.case_number) }}"
+              style="display: inline; margin: 0;"
+              onsubmit="return confirm('Remove {{ r.case_number }} from the mail queue?\n\nThe record stays on file — you can restore it from the lead detail page.');">
+          <button type="submit" class="btn btn-secondary btn-tiny"
+                  title="Skip this letter — keeps the record, never mails it.">
+            Remove
+          </button>
+        </form>
       </td>
     </tr>
     {% endfor %}

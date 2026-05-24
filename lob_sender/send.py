@@ -102,6 +102,7 @@ READY_TO_MAIL_BASE = """
     WHERE owner_mailing_address IS NOT NULL
       AND owner_full_name      IS NOT NULL
       AND lob_letter_id        IS NULL
+      AND (do_not_mail IS NULL OR do_not_mail = 0)
       AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
 """
 

@@ -419,6 +419,11 @@ def _migrate_violations(conn) -> None:
         ("lob_address_deliverability", "TEXT"),  # 'deliverable' | 'undeliverable' | etc.
         ("lob_address_verified_at",    "TEXT"),  # ISO timestamp of last verify call
         ("lob_address_verify_error",   "TEXT"),  # last error string when verify failed
+        # Operator soft-skip: row stays in DB for history/reporting but never
+        # appears in the mail queue and is never sent by Lob.
+        ("do_not_mail",                "INTEGER NOT NULL DEFAULT 0"),
+        ("do_not_mail_reason",         "TEXT"),  # free-text why (operator note)
+        ("do_not_mail_at",             "TEXT"),  # ISO timestamp when flagged
     ]
     for col, ddl in additions:
         if col not in existing:
