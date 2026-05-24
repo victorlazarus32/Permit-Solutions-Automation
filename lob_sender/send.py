@@ -423,6 +423,71 @@ def send_batch(
     }
 
 
+def verify_queue(limit: int | None = None, only_unchecked: bool = True,
+                 on_progress=None) -> dict:
+    """
+    Run Lob address verification across rows that are sitting in the queue.
+
+    Useful for backfilling: lets the operator see deliverability for everything
+    already queued without waiting for the next mail send.
+
+    Args:
+      limit:          Optional cap on rows verified this call.
+      only_unchecked: True (default) skips rows that already have a
+                      lob_address_deliverability value. False re-verifies.
+
+    Returns: {"considered", "verified", "deliverable", "undeliverable", "errors"}
+    """
+    init_db()
+    api_key = os.environ.get("LOB_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("LOB_API_KEY env var is required.")
+
+    sql = READY_TO_MAIL_BASE
+    if only_unchecked:
+        sql += " AND lob_address_deliverability IS NULL"
+    sql += " ORDER BY first_seen_at ASC"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)}"
+
+    with connect() as conn:
+        rows = list(conn.execute(sql))
+
+    total = len(rows)
+    counts = {"verified": 0, "deliverable": 0, "undeliverable": 0, "errors": 0}
+
+    for i, row in enumerate(rows):
+        if on_progress:
+            try:
+                on_progress({"stage": "verifying", "done": i, "total": total,
+                             "case_number": row["case_number"]})
+            except Exception:
+                pass
+
+        derived = derive_for_row(dict(row))
+        if derived["errors"] or not derived["to_address"]:
+            counts["errors"] += 1
+            update_verification_state(
+                source=row["source"], case_number=row["case_number"],
+                deliverability=None,
+                error=",".join(derived["errors"]) or "no_to_address",
+            )
+            continue
+
+        verify = verify_us_address(derived["to_address"], api_key=api_key)
+        update_verification_state(
+            source=row["source"], case_number=row["case_number"],
+            deliverability=verify["deliverability"], error=verify["error"],
+        )
+        counts["verified"] += 1
+        if verify["deliverability"] == "undeliverable":
+            counts["undeliverable"] += 1
+        elif verify["ok"]:
+            counts["deliverable"] += 1
+
+    return {"considered": total, **counts}
+
+
 def _cli() -> None:
     p = argparse.ArgumentParser(description="Send queued violation letters via Lob.")
     p.add_argument("--limit", type=int, default=None,

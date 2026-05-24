@@ -1979,6 +1979,32 @@ def action_send():
     return redirect(url_for("dashboard"))
 
 
+@app.post("/actions/verify-queue")
+def action_verify_queue():
+    """Run Lob US address verification across all unchecked queued rows."""
+    def _run_verify(on_progress=None):
+        try:
+            from lob_sender.send import verify_queue
+            summary = verify_queue(on_progress=on_progress)
+            return {
+                "considered":    summary.get("considered", 0),
+                "verified":      summary.get("verified", 0),
+                "deliverable":   summary.get("deliverable", 0),
+                "undeliverable": summary.get("undeliverable", 0),
+                "errors":        summary.get("errors", 0),
+                "error":         None,
+            }
+        except RuntimeError as e:
+            return {"considered": 0, "verified": 0, "deliverable": 0,
+                    "undeliverable": 0, "errors": 0, "error": str(e)}
+
+    if not _start_task("verify_queue", _run_verify):
+        flash("Another task is already running. Wait for it to finish.", "warning")
+    else:
+        flash("Verifying queued addresses with Lob. The beacon up top tracks progress.", "info")
+    return redirect(url_for("queue"))
+
+
 @app.get("/api/ready-count")
 def api_ready_count():
     """How many letters would mail if we filtered by ?since=YYYY-MM-DD right now."""

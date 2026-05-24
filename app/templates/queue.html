@@ -3,8 +3,20 @@
 
 {% block content %}
 <section class="hero">
-  <h1>Letter Queue</h1>
-  <p class="hero-sub">{{ count }} letter{% if count != 1 %}s{% endif %} ready to mail. Sorted newest first.</p>
+  <div class="lead-hero-row">
+    <div>
+      <h1>Letter Queue</h1>
+      <p class="hero-sub">{{ count }} letter{% if count != 1 %}s{% endif %} ready to mail. Sorted newest first.</p>
+    </div>
+    {% if rows %}
+    <form method="POST" action="{{ url_for('action_verify_queue') }}" style="margin: 0;">
+      <button type="submit" class="btn-secondary"
+              title="Run Lob US address verification on every queued row that hasn't been checked yet (~$0.0075 each).">
+        Verify queued addresses
+      </button>
+    </form>
+    {% endif %}
+  </div>
 </section>
 
 {% if rows %}
