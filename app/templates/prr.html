@@ -3,9 +3,18 @@
 
 {% block content %}
 
-<section class="hero">
-  <h1>Public Records Request Registry</h1>
-  <p class="hero-sub">Tracks every PRR per city, calculates the next-due date automatically, and keeps the gap between consecutive requests minimal. Cadence: every {{ cadence_days }} days per city.</p>
+<section class="hero page-intro">
+  <div class="eyebrow">
+    PRR Registry
+    <span class="eyebrow-sep"></span>
+    <span class="eyebrow-dim">Continuous Coverage</span>
+  </div>
+  <h1>Every request, <span class="accent">tracked</span>. Every gap, <span class="marker">closed</span>.</h1>
+  <p class="hero-sub">One row per PRR per city. The next-due date calculates itself from the last fulfilled window. Cadence locked at every {{ cadence_days }} days &mdash; no city slips.</p>
+  <div class="intro-meta">
+    <span class="pulse-dot">Auto-fulfill armed</span>
+  </div>
+  <hr class="hero-rule">
 </section>
 
 <section class="prr-grid">
