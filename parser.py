@@ -22,9 +22,34 @@ from typing import Any
 
 import pandas as pd
 
-from config.keywords import KEYWORD_PATTERNS
+from config.keywords import KEYWORD_PATTERNS, EXCLUSION_COOCCURRENCE
 
 _KEYWORD_RE = re.compile("|".join(KEYWORD_PATTERNS), re.IGNORECASE)
+
+# Compile once: each pair becomes (regex_a, regex_b). A row is excluded when
+# BOTH patterns appear within the same sentence of the searched field.
+_EXCLUSION_PAIRS = [
+    (re.compile(a, re.IGNORECASE), re.compile(b, re.IGNORECASE))
+    for a, b in EXCLUSION_COOCCURRENCE
+]
+
+# Split on terminal punctuation. Most violation descriptions are a single
+# fragment with no period, but city portals occasionally produce multi-sentence
+# narratives (e.g. "FENCE NO PERMIT. MILDEW ON ROOF.") and we want each
+# sentence judged on its own merits — exclusion shouldn't poison a row whose
+# OTHER sentence is genuinely in-scope.
+_SENTENCE_SPLIT_RE = re.compile(r"[.!?]+")
+
+
+def is_excluded_by_cooccurrence(text: str | None) -> bool:
+    """True if any exclusion pair's two patterns both match the same sentence."""
+    if not text or not _EXCLUSION_PAIRS:
+        return False
+    for sentence in _SENTENCE_SPLIT_RE.split(str(text)):
+        for re_a, re_b in _EXCLUSION_PAIRS:
+            if re_a.search(sentence) and re_b.search(sentence):
+                return True
+    return False
 
 # Canonical fields the DB knows about (everything except identity + lob_*)
 CANONICAL_FIELDS = (
@@ -112,6 +137,11 @@ def build_record(
 
     matched = find_matched_keywords(record.get(keyword_search_field))
     if not matched and not skip_filter:
+        return None
+    # Co-occurrence exclusions apply only when the inclusion filter is
+    # active. Pre-filtered uploads (records-request exports the operator
+    # has already scoped) bypass both rules.
+    if matched and is_excluded_by_cooccurrence(record.get(keyword_search_field)):
         return None
     record["matched_keywords"] = ",".join(matched) if matched else "(pre-filtered)"
 

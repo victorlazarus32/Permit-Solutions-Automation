@@ -18,6 +18,19 @@ etc.) are functionally redundant with the bare fence/gate regexes, but they
 make the matched_keywords column self-documenting at review time.
 """
 
+# Co-occurrence exclusions: if BOTH patterns in a pair match the same sentence,
+# the row is dropped even after the inclusion filter said yes. Use this to
+# strip out keyword-positive cases that are really nuisance citations.
+#
+# Pinecrest's "MILDEW ON ROOF" cases match the `roof` keyword but they are
+# pressure-wash cleanliness violations under Chapter 15 Nuisances, not
+# roofing-permit problems. Esteban can't bid those, so we drop them at the
+# parser instead of letting them sit in the queue for manual triage.
+EXCLUSION_COOCCURRENCE = [
+    (r"\bmildew\b", r"\broof"),
+]
+
+
 KEYWORD_PATTERNS = [
     # Fence / fencing (any material).
     # NOTE: stem is `fenc`, not `fence` -- the letter `e` is NOT inside `fencing`
