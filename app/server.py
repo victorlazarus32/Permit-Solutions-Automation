@@ -1892,7 +1892,7 @@ def action_palmetto_bay():
 
 
 # Cities that accept manual PRR uploads. Add to this list as new connectors come online.
-_PRR_CITIES = ["homestead", "palmetto_bay", "cutler_bay", "pinecrest", "miami_beach"]
+_PRR_CITIES = ["homestead", "palmetto_bay", "cutler_bay", "pinecrest", "miami_beach", "city_of_miami"]
 
 
 @app.route("/upload-prr", methods=["GET", "POST"])
