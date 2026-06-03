@@ -127,19 +127,11 @@ def _pull_pinecrest() -> dict:
     return out
 
 
-def _pull_palmetto_bay() -> dict:
-    """Pull Palmetto Bay via Eden (Playwright). Returns {pulled, in_scope, inserted, error}."""
-    out = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": None}
-    try:
-        from connectors.eden import run as _run_eden
-        summary = _run_eden("palmetto_bay")
-        out["pulled"]   = summary.get("fetched")  or 0
-        out["in_scope"] = summary.get("in_scope") or 0
-        out["inserted"] = summary.get("inserted") or 0
-    except Exception as e:
-        out["error"] = f"{type(e).__name__}: {e}"
-        log.exception("Palmetto Bay pull failed")
-    return out
+# Palmetto Bay Eden auto-pull was disabled 2026-06-03: that portal only carries
+# pending PSS-trade permits, not code violations, which is off-scope under the
+# violations-only rule. Palmetto Bay is now PRR-only; see /upload-prr. The
+# connector code in connectors/eden.py is intentionally retained so it can be
+# revived for another Eden city without re-implementation.
 
 
 def _send_letters(since_days: int) -> dict:
@@ -160,7 +152,7 @@ def _send_letters(since_days: int) -> dict:
 
 # ---------- summary ----------
 
-def _compose_summary(*, hs: dict, md: dict, pc: dict, pb: dict, send: dict | None,
+def _compose_summary(*, hs: dict, md: dict, pc: dict, send: dict | None,
                      auto_send: bool, since_days: int) -> str:
     """Plain-text report — looks like the email body we'll eventually send."""
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -198,16 +190,6 @@ def _compose_summary(*, hs: dict, md: dict, pc: dict, pb: dict, send: dict | Non
         lines.append(f"  In scope:  {pc['in_scope']:>3} (after keyword filter)")
         lines.append(f"  Inserted:  {pc['inserted']:>3} new rows in DB")
     lines.append("")
-    lines.append("PALMETTO BAY (Eden — pending PSS-trade permits)")
-    if pb["error"] == "skipped":
-        lines.append("  Skipped this run.")
-    elif pb["error"]:
-        lines.append(f"  FAILED: {pb['error']}")
-    else:
-        lines.append(f"  Pulled:    {pb['pulled']:>3} pending rows")
-        lines.append(f"  In scope:  {pb['in_scope']:>3} (already filtered by permit type)")
-        lines.append(f"  Inserted:  {pb['inserted']:>3} new rows in DB")
-    lines.append("")
     lines.append("LETTERS")
     if not auto_send:
         lines.append(f"  Auto-send is OFF. Review at https://app.permitsolutions.us/queue")
@@ -236,8 +218,6 @@ def main(argv: list[str] | None = None) -> int:
                    help="Skip Homestead + Pinecrest (useful for retrying MD only).")
     p.add_argument("--pinecrest-only", action="store_true",
                    help="Skip everything except Pinecrest.")
-    p.add_argument("--palmetto-bay-only", action="store_true",
-                   help="Skip everything except Palmetto Bay.")
     p.add_argument("--dry-run", action="store_true",
                    help="Pull, but do not send letters even if DAILY_AUTO_SEND=1.")
     args = p.parse_args(argv)
@@ -257,10 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     overall_status = "success"
 
     # When a --foo-only flag is set, every OTHER source is skipped.
-    skip_hs = args.miami_dade_only or args.pinecrest_only or args.palmetto_bay_only
-    skip_md = args.homestead_only  or args.pinecrest_only or args.palmetto_bay_only
-    skip_pc = args.homestead_only  or args.miami_dade_only or args.palmetto_bay_only
-    skip_pb = args.homestead_only  or args.miami_dade_only or args.pinecrest_only
+    skip_hs = args.miami_dade_only or args.pinecrest_only
+    skip_md = args.homestead_only  or args.pinecrest_only
+    skip_pc = args.homestead_only  or args.miami_dade_only
 
     # 1. Homestead
     hs = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped"}
@@ -283,22 +262,15 @@ def main(argv: list[str] | None = None) -> int:
     if pc["error"] and pc["error"] != "skipped":
         overall_status = "partial"
 
-    # 4. Palmetto Bay (via Eden — different Tyler product, ditto Playwright)
-    pb = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped"}
-    if not skip_pb:
-        pb = _pull_palmetto_bay()
-    if pb["error"] and pb["error"] != "skipped":
-        overall_status = "partial"
-
-    # 5. Optional auto-send
+    # 4. Optional auto-send
     send: dict | None = None
     if auto_send:
         send = _send_letters(since_days=since_days)
         if send.get("error") or (send.get("failed") or 0) > 0:
             overall_status = "partial" if overall_status == "success" else overall_status
 
-    # 6. Compose summary + record
-    summary = _compose_summary(hs=hs, md=md, pc=pc, pb=pb, send=send,
+    # 5. Compose summary + record
+    summary = _compose_summary(hs=hs, md=md, pc=pc, send=send,
                                auto_send=auto_send, since_days=since_days)
     log.info("Summary:\n%s", summary)
 
@@ -315,15 +287,12 @@ def main(argv: list[str] | None = None) -> int:
         pinecrest_pulled=pc["pulled"],
         pinecrest_in_scope=pc["in_scope"],
         pinecrest_inserted=pc["inserted"],
-        palmetto_bay_pulled=pb["pulled"],
-        palmetto_bay_in_scope=pb["in_scope"],
-        palmetto_bay_inserted=pb["inserted"],
         letters_eligible=(send or {}).get("considered", 0),
         letters_sent=(send or {}).get("sent", 0),
         letters_skipped=(send or {}).get("skipped", 0),
         letters_failed=(send or {}).get("failed", 0),
         error_text=next(
-            (e for e in (hs["error"], md["error"], pc["error"], pb["error"],
+            (e for e in (hs["error"], md["error"], pc["error"],
                          (send or {}).get("error"))
              if e and e != "skipped"),
             None,

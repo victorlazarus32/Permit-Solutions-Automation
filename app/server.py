@@ -57,7 +57,6 @@ from db import DB_PATH, init_db
 init_db()
 from scripts.morning_run import (run_miami_dade, run_homestead,
                                   run_homestead_tyler, run_pinecrest_etrakit,
-                                  run_palmetto_bay_eden,
                                   fetch_totals, run_send)
 
 LOG_FILE = PROJECT_ROOT / "data" / "morning_run.log"
@@ -1878,16 +1877,6 @@ def action_pinecrest():
     else:
         flash("Pulling new Pinecrest code cases from the eTRAKiT portal. "
               "This takes about a minute.", "info")
-    return redirect(url_for("dashboard"))
-
-
-@app.post("/actions/pull-palmetto-bay")
-def action_palmetto_bay():
-    if not _start_task("palmetto_bay", run_palmetto_bay_eden):
-        flash("Another task is already running. Wait for it to finish.", "warning")
-    else:
-        flash("Pulling pending Palmetto Bay permits from the Eden portal. "
-              "This takes about two minutes (14 trade-type searches).", "info")
     return redirect(url_for("dashboard"))
 
 
