@@ -393,6 +393,35 @@ CREATE TABLE IF NOT EXISTS daily_runs (
 );
 
 CREATE INDEX IF NOT EXISTS ix_daily_runs_started ON daily_runs(started_at DESC);
+
+-- ===== Public-records request registry =====
+-- One row per PRR ever submitted to a city. Tracks the date window each
+-- request covered so the next request can start exactly where the prior
+-- one stopped — no gap, no overlap. The /prr page reads from here.
+CREATE TABLE IF NOT EXISTS prr_requests (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    city                 TEXT NOT NULL,            -- matches connector source key
+    reference_number     TEXT,                     -- e.g. 'PRR-2026-144', '26-3395'
+    security_key         TEXT,                     -- JustFOIA-style secondary auth code
+    portal_url           TEXT,                     -- frozen at submit time
+    custodian_email      TEXT,
+    custodian_phone      TEXT,
+    submitted_at         TEXT NOT NULL,            -- ISO YYYY-MM-DD
+    covers_from          TEXT,                     -- ISO YYYY-MM-DD; first day of requested window
+    covers_through       TEXT,                     -- ISO YYYY-MM-DD; last day of requested window
+    status               TEXT NOT NULL DEFAULT 'open',  -- 'open' | 'fulfilled' | 'no_records' | 'declined'
+    fulfilled_at         TEXT,                     -- ISO date when response (Excel or denial) was received
+    excel_uploaded_at    TEXT,                     -- ISO timestamp when the response Excel was processed via /upload-prr
+    reminder_routine_id  TEXT,                     -- e.g. 'trig_xxx' for the scheduled status-check routine
+    notes                TEXT,                     -- free-text operator notes
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_prr_requests_city_submitted
+    ON prr_requests(city, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS ix_prr_requests_status
+    ON prr_requests(status);
 """
 
 

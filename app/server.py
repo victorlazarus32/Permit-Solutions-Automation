@@ -49,7 +49,7 @@ from flask import Flask, render_template, redirect, url_for, request, flash, jso
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
-from db import DB_PATH, init_db
+from db import DB_PATH, init_db, connect as db_connect
 
 # Ensure all tables exist at web-service startup. Without this, new tables
 # (scope_modules, contracts, etc.) wouldn't be created until a scraper run,
@@ -1906,14 +1906,300 @@ def upload_prr():
         dest = dest_dir / safe_name
         f.save(str(dest))
         log.info("PRR uploaded by %s: %s -> %s", session.get("user"), f.filename, dest)
-        flash(
-            f"Uploaded {safe_name} to the {city.replace('_',' ').title()} inbox. "
-            f"Click Process PRR on the dashboard to ingest it.",
-            "success",
-        )
+
+        # Auto-fulfill: when an operator uploads the Excel response to a PRR,
+        # close the most recent open PRR for that city in one shot and queue
+        # the next round. This is the "minimize the gap" mechanic — the
+        # operator never has to think about which PRR this file fulfills or
+        # when to send the next one.
+        fulfilled, next_due = _autofulfill_latest_prr(city)
+        if fulfilled:
+            flash(
+                f"Uploaded {safe_name} → auto-closed PRR "
+                f"#{fulfilled['reference_number'] or fulfilled['id']} for "
+                f"{city.replace('_',' ').title()}. Next PRR due "
+                f"{next_due}. Click Process PRR on the dashboard to ingest.",
+                "success",
+            )
+        else:
+            flash(
+                f"Uploaded {safe_name} to the {city.replace('_',' ').title()} "
+                f"inbox. Click Process PRR on the dashboard to ingest it.",
+                "success",
+            )
         return redirect(url_for("dashboard"))
 
     return render_template("upload.html", cities=_PRR_CITIES)
+
+
+# ---------------------------------------------------------------------------
+# PRR Registry — track every public-records request across its full lifecycle
+# so the gap between consecutive PRRs to each city stays minimal. Cadence
+# (PRR_CADENCE_DAYS) controls how soon the next round is due; the operator
+# console highlights anything past that date as a follow-up action.
+# ---------------------------------------------------------------------------
+
+def _autofulfill_latest_prr(city: str) -> tuple[dict | None, str | None]:
+    """
+    Mark the most recent open PRR for `city` as fulfilled and return
+    (fulfilled_row, next_due_date_iso). Returns (None, None) if there's no
+    open PRR for that city to fulfill.
+    """
+    from datetime import date as _date, timedelta
+    from config.prr_cities import PRR_CADENCE_DAYS
+
+    today = _date.today().isoformat()
+    with db_connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM prr_requests
+             WHERE city = ? AND status = 'open'
+             ORDER BY submitted_at DESC, id DESC LIMIT 1
+            """,
+            (city,),
+        ).fetchone()
+        if row is None:
+            return None, None
+        conn.execute(
+            """
+            UPDATE prr_requests
+               SET status            = 'fulfilled',
+                   fulfilled_at      = ?,
+                   excel_uploaded_at = ?,
+                   updated_at        = ?
+             WHERE id = ?
+            """,
+            (today, _utc_now_iso(), _utc_now_iso(), row["id"]),
+        )
+    # Next due = covers_through + cadence (or today + cadence if covers_through is null).
+    base = row["covers_through"] or today
+    try:
+        next_due = (_date.fromisoformat(base) + timedelta(days=PRR_CADENCE_DAYS)).isoformat()
+    except ValueError:
+        next_due = (_date.fromisoformat(today) + timedelta(days=PRR_CADENCE_DAYS)).isoformat()
+    return dict(row), next_due
+
+
+def _utc_now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _prr_index_rows() -> list[dict]:
+    """
+    Return one summary row per known PRR city, joined with its latest PRR.
+    Includes computed fields: days_since_last, next_due_at, status_label.
+    """
+    from datetime import date as _date, timedelta
+    from config.prr_cities import PRR_CITIES, PRR_CADENCE_DAYS
+
+    today = _date.today()
+    out: list[dict] = []
+    with db_connect() as conn:
+        for source, cfg in PRR_CITIES.items():
+            latest = conn.execute(
+                """
+                SELECT * FROM prr_requests
+                 WHERE city = ?
+                 ORDER BY submitted_at DESC, id DESC LIMIT 1
+                """,
+                (source,),
+            ).fetchone()
+            history_count = conn.execute(
+                "SELECT COUNT(*) FROM prr_requests WHERE city = ?", (source,),
+            ).fetchone()[0]
+
+            row = {
+                "source":           source,
+                "pretty_name":      cfg.pretty_name,
+                "portal_url":       cfg.portal_url,
+                "custodian_email":  cfg.custodian_email,
+                "custodian_phone":  cfg.custodian_phone,
+                "history_count":    history_count,
+                "latest":           dict(latest) if latest else None,
+                "next_due_at":      None,
+                "days_until_due":   None,
+                "state":            "never_submitted",
+            }
+
+            if latest:
+                if latest["status"] == "fulfilled" and latest["covers_through"]:
+                    try:
+                        next_due = _date.fromisoformat(latest["covers_through"]) \
+                                   + timedelta(days=PRR_CADENCE_DAYS)
+                        row["next_due_at"] = next_due.isoformat()
+                        row["days_until_due"] = (next_due - today).days
+                        row["state"] = ("due_now" if row["days_until_due"] <= 0
+                                        else "scheduled")
+                    except ValueError:
+                        row["state"] = "fulfilled_no_window"
+                elif latest["status"] == "open":
+                    try:
+                        submitted = _date.fromisoformat(latest["submitted_at"])
+                        row["days_open"] = (today - submitted).days
+                        row["state"] = ("stale" if row["days_open"] > 7
+                                        else "awaiting_response")
+                    except ValueError:
+                        row["state"] = "awaiting_response"
+                else:
+                    row["state"] = latest["status"]
+            out.append(row)
+
+    # Sort: due_now first, then stale, then awaiting, then scheduled by date, then never.
+    order = {"due_now": 0, "stale": 1, "awaiting_response": 2,
+             "scheduled": 3, "fulfilled_no_window": 4, "never_submitted": 5,
+             "no_records": 6, "declined": 7}
+    out.sort(key=lambda r: (order.get(r["state"], 99), r["next_due_at"] or ""))
+    return out
+
+
+def _prr_suggested_window(city: str) -> tuple[str, str]:
+    """
+    Pre-fill (covers_from, covers_through) for a new PRR. Continuity rule:
+    covers_from = most-recent fulfilled PRR's covers_through + 1 day. Falls
+    back to (today - cadence) if no prior history exists.
+    """
+    from datetime import date as _date, timedelta
+    from config.prr_cities import PRR_CADENCE_DAYS
+
+    today = _date.today()
+    with db_connect() as conn:
+        prev = conn.execute(
+            """
+            SELECT covers_through FROM prr_requests
+             WHERE city = ? AND status = 'fulfilled' AND covers_through IS NOT NULL
+             ORDER BY covers_through DESC LIMIT 1
+            """,
+            (city,),
+        ).fetchone()
+    if prev and prev["covers_through"]:
+        try:
+            start = (_date.fromisoformat(prev["covers_through"])
+                     + timedelta(days=1))
+        except ValueError:
+            start = today - timedelta(days=PRR_CADENCE_DAYS)
+    else:
+        start = today - timedelta(days=PRR_CADENCE_DAYS)
+    # Guard against start > today (only possible when fulfilling and
+    # logging in the same day — the next PRR window would otherwise be
+    # inverted). Clamp end to max(start, today) so the window is at
+    # minimum a single day.
+    end = max(start, today)
+    return start.isoformat(), end.isoformat()
+
+
+@app.route("/prr")
+def prr_index():
+    from config.prr_cities import PRR_CITIES, PRR_CADENCE_DAYS
+    rows = _prr_index_rows()
+    return render_template(
+        "prr.html",
+        rows=rows,
+        cities=PRR_CITIES,
+        cadence_days=PRR_CADENCE_DAYS,
+    )
+
+
+@app.post("/prr/new")
+def prr_new():
+    from config.prr_cities import PRR_CITIES, render_request_body
+
+    city = (request.form.get("city") or "").strip().lower()
+    if city not in PRR_CITIES:
+        flash("Pick a valid city from the dropdown.", "error")
+        return redirect(url_for("prr_index"))
+    cfg = PRR_CITIES[city]
+
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    suggested_from, suggested_through = _prr_suggested_window(city)
+
+    fields = {
+        "city":             city,
+        "reference_number": (request.form.get("reference_number") or "").strip() or None,
+        "security_key":     (request.form.get("security_key")     or "").strip() or None,
+        "portal_url":       cfg.portal_url,
+        "custodian_email":  cfg.custodian_email,
+        "custodian_phone":  cfg.custodian_phone,
+        "submitted_at":     (request.form.get("submitted_at") or today).strip(),
+        "covers_from":      (request.form.get("covers_from") or suggested_from).strip() or None,
+        "covers_through":   (request.form.get("covers_through") or suggested_through).strip() or None,
+        "status":           "open",
+        "notes":            (request.form.get("notes") or "").strip() or None,
+        "created_at":       _utc_now_iso(),
+        "updated_at":       _utc_now_iso(),
+    }
+
+    with db_connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO prr_requests (
+              city, reference_number, security_key, portal_url,
+              custodian_email, custodian_phone, submitted_at,
+              covers_from, covers_through, status, notes,
+              created_at, updated_at
+            ) VALUES (
+              :city, :reference_number, :security_key, :portal_url,
+              :custodian_email, :custodian_phone, :submitted_at,
+              :covers_from, :covers_through, :status, :notes,
+              :created_at, :updated_at
+            )
+            """,
+            fields,
+        )
+        new_id = cur.lastrowid
+
+    flash(
+        f"Logged PRR for {cfg.pretty_name} "
+        f"(covering {fields['covers_from']} → {fields['covers_through']}). "
+        f"When the response Excel arrives, upload it on /upload-prr and the "
+        f"system will auto-close this PRR and queue the next round.",
+        "success",
+    )
+    return redirect(url_for("prr_index"))
+
+
+@app.post("/prr/<int:prr_id>/fulfill")
+def prr_fulfill(prr_id: int):
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    with db_connect() as conn:
+        row = conn.execute("SELECT * FROM prr_requests WHERE id = ?",
+                           (prr_id,)).fetchone()
+        if row is None:
+            flash("PRR not found.", "error")
+            return redirect(url_for("prr_index"))
+        new_status = (request.form.get("status") or "fulfilled").strip()
+        if new_status not in ("fulfilled", "no_records", "declined", "open"):
+            flash("Invalid status.", "error")
+            return redirect(url_for("prr_index"))
+        conn.execute(
+            """
+            UPDATE prr_requests
+               SET status       = ?,
+                   fulfilled_at = ?,
+                   updated_at   = ?
+             WHERE id = ?
+            """,
+            (new_status, today if new_status != "open" else None,
+             _utc_now_iso(), prr_id),
+        )
+    flash(f"PRR #{prr_id} marked {new_status}.", "success")
+    return redirect(url_for("prr_index"))
+
+
+@app.get("/prr/preview-body")
+def prr_preview_body():
+    """Render a request-body template for the /prr Log-PRR form's preview."""
+    from config.prr_cities import PRR_CITIES, render_request_body
+    city = (request.args.get("city") or "").strip().lower()
+    if city not in PRR_CITIES:
+        return ("Pick a city first.", 200, {"Content-Type": "text/plain"})
+    start, end = _prr_suggested_window(city)
+    requester = session.get("user_email") or "victor@permitsolutions.us"
+    body = render_request_body(PRR_CITIES[city], start=start, end=end,
+                               requester_email=requester)
+    return (body, 200, {"Content-Type": "text/plain"})
 
 
 def _lob_ready() -> tuple[bool, str | None]:

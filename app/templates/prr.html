@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}PRR Registry{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <h1>Public Records Request Registry</h1>
+  <p class="hero-sub">Tracks every PRR per city, calculates the next-due date automatically, and keeps the gap between consecutive requests minimal. Cadence: every {{ cadence_days }} days per city.</p>
+</section>
+
+<section class="prr-grid">
+  {% for r in rows %}
+  <div class="prr-card prr-state-{{ r.state }}">
+    <div class="prr-card-head">
+      <h3>{{ r.pretty_name }}</h3>
+      <span class="prr-pill prr-pill-{{ r.state }}">
+        {% if r.state == 'due_now' %}DUE NOW
+        {% elif r.state == 'stale' %}NO RESPONSE {{ r.days_open }}d
+        {% elif r.state == 'awaiting_response' %}AWAITING RESPONSE
+        {% elif r.state == 'scheduled' %}NEXT IN {{ r.days_until_due }}d
+        {% elif r.state == 'fulfilled_no_window' %}FULFILLED
+        {% elif r.state == 'never_submitted' %}NEVER SUBMITTED
+        {% else %}{{ r.state.replace('_',' ').upper() }}{% endif %}
+      </span>
+    </div>
+
+    {% if r.latest %}
+    <dl class="prr-meta">
+      <dt>Last submitted</dt>
+      <dd>{{ r.latest.submitted_at }}{% if r.latest.reference_number %} &middot; <code>{{ r.latest.reference_number }}</code>{% endif %}</dd>
+      {% if r.latest.security_key %}
+      <dt>Security key</dt><dd><code>{{ r.latest.security_key }}</code></dd>
+      {% endif %}
+      <dt>Covers</dt>
+      <dd>{{ r.latest.covers_from or '?' }} &rarr; {{ r.latest.covers_through or '?' }}</dd>
+      {% if r.latest.status == 'fulfilled' and r.latest.fulfilled_at %}
+      <dt>Fulfilled</dt><dd>{{ r.latest.fulfilled_at }}</dd>
+      {% endif %}
+      {% if r.next_due_at %}
+      <dt>Next due</dt><dd>{{ r.next_due_at }}</dd>
+      {% endif %}
+      <dt>History</dt><dd>{{ r.history_count }} request{{ '' if r.history_count == 1 else 's' }}</dd>
+    </dl>
+    {% else %}
+    <p class="prr-empty">No PRRs logged yet for {{ r.pretty_name }}.</p>
+    {% endif %}
+
+    <div class="prr-card-actions">
+      <a class="btn-secondary" href="{{ r.portal_url }}" target="_blank" rel="noopener">Open portal &nearr;</a>
+      {% if r.latest and r.latest.status == 'open' %}
+      <form method="POST" action="{{ url_for('prr_fulfill', prr_id=r.latest.id) }}" style="display:inline;">
+        <input type="hidden" name="status" value="fulfilled">
+        <button type="submit" class="btn-primary">Mark fulfilled</button>
+      </form>
+      <form method="POST" action="{{ url_for('prr_fulfill', prr_id=r.latest.id) }}" style="display:inline;">
+        <input type="hidden" name="status" value="no_records">
+        <button type="submit" class="btn-secondary">No records</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <details class="prr-contact">
+      <summary>Contact &amp; custodian</summary>
+      <dl class="prr-meta">
+        <dt>Email</dt><dd><a href="mailto:{{ r.custodian_email }}">{{ r.custodian_email }}</a></dd>
+        <dt>Phone</dt><dd>{{ r.custodian_phone }}</dd>
+      </dl>
+    </details>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="lead-card" style="margin-top: 28px;">
+  <h3 class="lead-card-title">Log a new PRR</h3>
+  <p class="hero-sub" style="margin-top: -4px;">Use this after you submit a PRR on the city's portal. The date window pre-fills based on the previous fulfilled PRR for that city &mdash; continuity guaranteed.</p>
+
+  <form method="POST" action="{{ url_for('prr_new') }}" class="log-event-card">
+    <div class="form-row">
+      <div class="form-field">
+        <label for="prr-city">City</label>
+        <select name="city" id="prr-city" required onchange="prrLoadDefaults()">
+          <option value="">Pick a city...</option>
+          {% for src, c in cities.items() %}
+          <option value="{{ src }}">{{ c.pretty_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="prr-ref">Reference number</label>
+        <input type="text" name="reference_number" id="prr-ref" placeholder="e.g. PRR-2026-144">
+      </div>
+      <div class="form-field">
+        <label for="prr-key">Security key (if any)</label>
+        <input type="text" name="security_key" id="prr-key" placeholder="e.g. 2DE45C15">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="prr-submitted">Submitted on</label>
+        <input type="date" name="submitted_at" id="prr-submitted">
+      </div>
+      <div class="form-field">
+        <label for="prr-from">Covers from</label>
+        <input type="date" name="covers_from" id="prr-from">
+      </div>
+      <div class="form-field">
+        <label for="prr-through">Covers through</label>
+        <input type="date" name="covers_through" id="prr-through">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="prr-notes">Notes</label>
+        <textarea name="notes" id="prr-notes" rows="2" placeholder="Optional"></textarea>
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label>Request body (preview &mdash; copy this into the portal)</label>
+        <textarea id="prr-body-preview" rows="10" readonly style="font-family: ui-monospace, monospace; font-size: 0.85rem;"></textarea>
+      </div>
+    </div>
+    <button type="submit" class="btn-primary">Log PRR</button>
+  </form>
+</section>
+
+<script>
+/* Auto-fill the dates + body preview based on the selected city's last fulfilled PRR.
+   The server's /prr/preview-body endpoint computes the suggested window from history. */
+function prrLoadDefaults() {
+  var city = document.getElementById('prr-city').value;
+  var submitted = document.getElementById('prr-submitted');
+  var coversFrom = document.getElementById('prr-from');
+  var coversThrough = document.getElementById('prr-through');
+  var bodyPreview = document.getElementById('prr-body-preview');
+
+  if (!city) {
+    bodyPreview.value = 'Pick a city to see the suggested request body.';
+    return;
+  }
+
+  // Today as ISO date
+  var today = new Date();
+  var iso = today.toISOString().slice(0, 10);
+  submitted.value = iso;
+
+  // Ask the server for the suggested body (and implicit window).
+  fetch('/prr/preview-body?city=' + encodeURIComponent(city))
+    .then(function(r) { return r.text(); })
+    .then(function(text) {
+      bodyPreview.value = text;
+      // Extract the start/end dates from the body — they appear once each.
+      var m = text.match(/between (\d{4}-\d{2}-\d{2}) and (\d{4}-\d{2}-\d{2})/);
+      if (m) {
+        coversFrom.value = m[1];
+        coversThrough.value = m[2];
+      } else {
+        coversThrough.value = iso;
+      }
+    });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('prr-body-preview').value =
+    'Pick a city to see the suggested request body.';
+});
+</script>
+
+<style>
+  .prr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 18px;
+    margin-top: 18px;
+  }
+  .prr-card {
+    background: #fff;
+    border: 1px solid var(--border, #e7e3da);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+  }
+  .prr-card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .prr-card-head h3 {
+    margin: 0; font-size: 1.05rem;
+  }
+  .prr-pill {
+    font-size: 0.7rem; letter-spacing: 0.06em; font-weight: 700; padding: 4px 8px;
+    border-radius: 999px; white-space: nowrap;
+  }
+  .prr-pill-due_now             { background: #ffe6d6; color: #8a3700; }
+  .prr-pill-stale               { background: #ffdce0; color: #931725; }
+  .prr-pill-awaiting_response   { background: #e8f2ff; color: #154d8a; }
+  .prr-pill-scheduled           { background: #e6f4e6; color: #196e1e; }
+  .prr-pill-fulfilled_no_window { background: #ededed; color: #555; }
+  .prr-pill-never_submitted     { background: #fff7ed; color: #8a5a00; }
+  .prr-state-due_now            { border-left: 4px solid #f08a24; }
+  .prr-state-stale              { border-left: 4px solid #c0203c; }
+  .prr-state-awaiting_response  { border-left: 4px solid #4f9fea; }
+  .prr-state-scheduled          { border-left: 4px solid #5bb060; }
+  .prr-state-never_submitted    { border-left: 4px solid #d6b06a; }
+  .prr-meta {
+    display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px;
+    font-size: 0.88rem; margin: 0 0 12px;
+  }
+  .prr-meta dt { color: #777; font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; }
+  .prr-meta dd { margin: 0; }
+  .prr-card-actions {
+    display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 4px;
+  }
+  .prr-card-actions a, .prr-card-actions button {
+    font-size: 0.85rem; padding: 6px 12px;
+  }
+  .prr-contact {
+    border-top: 1px dashed #ddd; padding-top: 8px; margin-top: 8px;
+    font-size: 0.85rem;
+  }
+  .prr-contact summary { cursor: pointer; color: #5d5d5d; }
+  .prr-empty { color: #999; font-style: italic; margin: 4px 0 12px; }
+</style>
+
+{% endblock %}
