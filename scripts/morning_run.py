@@ -214,6 +214,27 @@ def run_homestead_tyler() -> dict:
                 "error": f"Homestead Tyler pull failed: {e}. Tell Victor."}
 
 
+def run_pinecrest_etrakit() -> dict:
+    """
+    Pull new code cases from Pinecrest's eTRAKiT portal. Idempotent — the
+    connector keeps a date watermark so each run only fetches cases STARTED
+    on or after the last successful run.
+    """
+    from connectors.etrakit import run as etrakit_run
+
+    try:
+        s = etrakit_run("pinecrest")
+        return {"fetched":  s.get("fetched", 0),
+                "in_scope": s.get("in_scope", 0),
+                "inserted": s.get("inserted", 0),
+                "updated":  s.get("updated", 0),
+                "error":    None}
+    except Exception as e:
+        logging.exception("pinecrest eTRAKiT run failed")
+        return {"fetched": 0, "in_scope": 0, "inserted": 0, "updated": 0,
+                "error": f"Pinecrest pull failed: {e}. Tell Victor."}
+
+
 # ---------------------------------------------------------------------------
 # Step 3 — Show totals + confirm + send
 # ---------------------------------------------------------------------------
@@ -301,7 +322,7 @@ def main() -> int:
         banner(f"Good morning! {today_str}")
 
         # --- Step 1: Miami-Dade
-        step(1, 4, "Pulling new Miami-Dade cases...")
+        step(1, 5, "Pulling new Miami-Dade cases...")
         md = run_miami_dade()
         if md["error"]:
             friendly_error("Miami-Dade pull didn't work",
@@ -313,7 +334,7 @@ def main() -> int:
             info(f"{md['inserted']} new cases pulled ({md['updated']} already in the system)")
 
         # --- Step 2: Homestead Tyler (live API pull, replaces / supplements PRR)
-        step(2, 4, "Pulling new Homestead violations from Tyler portal...")
+        step(2, 5, "Pulling new Homestead violations from Tyler portal...")
         ht = run_homestead_tyler()
         if ht["error"]:
             friendly_error("Homestead Tyler pull didn't work",
@@ -323,8 +344,19 @@ def main() -> int:
             info(f"{ht['fetched']} cases checked, "
                  f"{ht['inserted']} new permit/zoning leads added")
 
-        # --- Step 3: Homestead PRR Excel inbox (legacy fallback)
-        step(3, 4, "Processing Homestead PRR spreadsheets...")
+        # --- Step 3: Pinecrest eTRAKiT (live portal pull)
+        step(3, 5, "Pulling new Pinecrest cases from eTRAKiT portal...")
+        pc = run_pinecrest_etrakit()
+        if pc["error"]:
+            friendly_error("Pinecrest pull didn't work",
+                           pc["error"],
+                           "The other steps still worked. Tell Victor about Pinecrest.")
+        else:
+            info(f"{pc['fetched']} cases checked, "
+                 f"{pc['inserted']} new in-scope leads added")
+
+        # --- Step 4: Homestead PRR Excel inbox (legacy fallback)
+        step(4, 5, "Processing Homestead PRR spreadsheets...")
         hs = run_homestead()
         if hs["error"]:
             friendly_error("Homestead files didn't process",
@@ -335,8 +367,8 @@ def main() -> int:
         else:
             info(f"{hs['files']} file(s) processed — {hs['inserted']} new records added")
 
-        # --- Step 4: Totals + confirm + send
-        step(4, 4, "Today's numbers")
+        # --- Step 5: Totals + confirm + send
+        step(5, 5, "Today's numbers")
         totals = fetch_totals()
         info(f"Total cases in system  : {totals['total']}")
         info(f"Ready to mail          : {totals['ready']}")

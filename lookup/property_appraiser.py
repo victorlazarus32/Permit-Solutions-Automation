@@ -22,6 +22,7 @@ Verified live 2026-05-03 against canary folio 1078130040420 (Homestead).
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import dataclass
 
@@ -181,6 +182,83 @@ def batch_lookup(folios, *, sleep_sec: float = PER_LOOKUP_SLEEP):
                                 raw={"error": str(e)})
             if sleep_sec:
                 time.sleep(sleep_sec)
+
+
+# ---------- ArcGIS address-to-folio resolver ----------
+#
+# The PA proxy's `GetPropertySearchByAddress` operation is too lossy for
+# automated enrichment (it silently returns a default GSA record on no-match
+# instead of an empty result). For high-precision address-to-folio lookups
+# — e.g. enriching the eTRAKiT connector's address-only result rows — we
+# query the underlying ArcGIS parcel layer directly. Verified live 2026-06-03
+# against Pinecrest cases.
+#
+# Quirk: the parcel layer stores street numbers WITHOUT ordinal suffixes
+# ("7390 SW 132 ST"), while most city portals format them WITH ("7390 SW
+# 132ND ST"). We strip ST/ND/RD/TH suffixes before querying.
+
+_GIS_PARCEL_LAYER = (
+    "https://gisfs.miamidade.gov/mdarcgis/rest/services/"
+    "MD_PA_PropertySearch/MapServer/0/query"
+)
+_ORDINAL_SUFFIX_RE = re.compile(r"(\d+)(?:ST|ND|RD|TH)\b", re.IGNORECASE)
+
+
+def _normalize_address_for_gis(addr: str) -> str:
+    """
+    Drop the ordinal suffix on street numbers ('132ND ST' -> '132 ST') and
+    collapse whitespace. Returns uppercase, since the GIS layer stores
+    addresses uppercase.
+    """
+    s = (addr or "").strip().upper()
+    if not s:
+        return ""
+    s = _ORDINAL_SUFFIX_RE.sub(r"\1", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def address_to_folio(address: str) -> str | None:
+    """
+    Resolve a street address to a Miami-Dade folio via the public PA ArcGIS
+    parcel layer. Returns the 13-digit folio string (no dashes) or None on
+    no-match / lookup error.
+
+    Try exact match first, then a prefix LIKE fallback for cases where the
+    eTRAKiT address carries a unit/suite the parcel layer omits.
+    """
+    norm = _normalize_address_for_gis(address)
+    if not norm:
+        return None
+
+    # SQL-escape single quotes for safety (rare in real addresses but cheap).
+    safe = norm.replace("'", "''")
+
+    for where in (f"TRUE_SITE_ADDR = '{safe}'",
+                  f"TRUE_SITE_ADDR LIKE '{safe}%'"):
+        try:
+            r = requests.get(
+                _GIS_PARCEL_LAYER,
+                params={
+                    "where":          where,
+                    "outFields":      "FOLIO,TRUE_SITE_ADDR",
+                    "returnGeometry": "false",
+                    "f":              "json",
+                },
+                headers={"accept": "application/json", "user-agent": USER_AGENT},
+                timeout=10,
+            )
+            r.raise_for_status()
+            feats = (r.json() or {}).get("features") or []
+        except (requests.RequestException, ValueError) as e:
+            log.warning("GIS address lookup error for %r: %s", address, e)
+            return None
+        if len(feats) == 1:
+            return (feats[0].get("attributes") or {}).get("FOLIO") or None
+        if len(feats) > 1:
+            # Ambiguous prefix match — refuse rather than guess. Caller will
+            # leave the row flagged NEEDS_OWNER_LOOKUP for a human.
+            return None
+    return None
 
 
 def search_by_address(query: str, limit: int = 8) -> list[dict]:

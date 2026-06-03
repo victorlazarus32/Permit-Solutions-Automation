@@ -112,6 +112,21 @@ def _pull_miami_dade() -> dict:
     return out
 
 
+def _pull_pinecrest() -> dict:
+    """Pull Pinecrest via eTRAKiT (Playwright). Returns {pulled, in_scope, inserted, error}."""
+    out = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": None}
+    try:
+        from connectors.etrakit import run as _run_etrakit
+        summary = _run_etrakit("pinecrest")
+        out["pulled"]   = summary.get("fetched")  or 0
+        out["in_scope"] = summary.get("in_scope") or 0
+        out["inserted"] = summary.get("inserted") or 0
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {e}"
+        log.exception("Pinecrest pull failed")
+    return out
+
+
 def _send_letters(since_days: int) -> dict:
     """Send any letter-ready cases opened in the last N days via Lob."""
     out = {"considered": 0, "sent": 0, "skipped": 0, "failed": 0, "error": None}
@@ -130,7 +145,7 @@ def _send_letters(since_days: int) -> dict:
 
 # ---------- summary ----------
 
-def _compose_summary(*, hs: dict, md: dict, send: dict | None,
+def _compose_summary(*, hs: dict, md: dict, pc: dict, send: dict | None,
                      auto_send: bool, since_days: int) -> str:
     """Plain-text report — looks like the email body we'll eventually send."""
     today = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -139,7 +154,9 @@ def _compose_summary(*, hs: dict, md: dict, send: dict | None,
     lines.append("=" * 50)
     lines.append("")
     lines.append("HOMESTEAD (Tyler API)")
-    if hs["error"]:
+    if hs["error"] == "skipped":
+        lines.append("  Skipped this run.")
+    elif hs["error"]:
         lines.append(f"  FAILED: {hs['error']}")
     else:
         lines.append(f"  Pulled:    {hs['pulled']:>3} raw rows")
@@ -147,12 +164,24 @@ def _compose_summary(*, hs: dict, md: dict, send: dict | None,
         lines.append(f"  Inserted:  {hs['inserted']:>3} new rows in DB")
     lines.append("")
     lines.append("MIAMI-DADE (Selenium scraper)")
-    if md["error"]:
+    if md["error"] == "skipped":
+        lines.append("  Skipped this run.")
+    elif md["error"]:
         lines.append(f"  FAILED: {md['error']}")
     else:
         lines.append(f"  Pulled:    {md['pulled']:>3} raw rows")
         lines.append(f"  In scope:  {md['in_scope']:>3} (after keyword filter)")
         lines.append(f"  Inserted:  {md['inserted']:>3} new rows in DB")
+    lines.append("")
+    lines.append("PINECREST (eTRAKiT)")
+    if pc["error"] == "skipped":
+        lines.append("  Skipped this run.")
+    elif pc["error"]:
+        lines.append(f"  FAILED: {pc['error']}")
+    else:
+        lines.append(f"  Pulled:    {pc['pulled']:>3} raw rows")
+        lines.append(f"  In scope:  {pc['in_scope']:>3} (after keyword filter)")
+        lines.append(f"  Inserted:  {pc['inserted']:>3} new rows in DB")
     lines.append("")
     lines.append("LETTERS")
     if not auto_send:
@@ -177,9 +206,11 @@ def _compose_summary(*, hs: dict, md: dict, send: dict | None,
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Daily Permit Solutions automated run.")
     p.add_argument("--homestead-only", action="store_true",
-                   help="Skip Miami-Dade (useful when Selenium is acting up).")
+                   help="Skip Miami-Dade + Pinecrest (useful when one is broken).")
     p.add_argument("--miami-dade-only", action="store_true",
-                   help="Skip Homestead (useful for retrying MD only).")
+                   help="Skip Homestead + Pinecrest (useful for retrying MD only).")
+    p.add_argument("--pinecrest-only", action="store_true",
+                   help="Skip Homestead + Miami-Dade (useful for retrying Pinecrest only).")
     p.add_argument("--dry-run", action="store_true",
                    help="Pull, but do not send letters even if DAILY_AUTO_SEND=1.")
     args = p.parse_args(argv)
@@ -199,28 +230,35 @@ def main(argv: list[str] | None = None) -> int:
     overall_status = "success"
 
     # 1. Homestead
-    hs = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped (--miami-dade-only)"}
-    if not args.miami_dade_only:
+    hs = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped"}
+    if not (args.miami_dade_only or args.pinecrest_only):
         hs = _pull_homestead()
-        if hs["error"]:
-            overall_status = "partial"
+    if hs["error"] and hs["error"] != "skipped":
+        overall_status = "partial"
 
     # 2. Miami-Dade
-    md = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped (--homestead-only)"}
-    if not args.homestead_only:
+    md = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped"}
+    if not (args.homestead_only or args.pinecrest_only):
         md = _pull_miami_dade()
-        if md["error"]:
-            overall_status = "partial"
+    if md["error"] and md["error"] != "skipped":
+        overall_status = "partial"
 
-    # 3. Optional auto-send
+    # 3. Pinecrest (via eTRAKiT — same Playwright stack as Miami-Dade)
+    pc = {"pulled": 0, "in_scope": 0, "inserted": 0, "error": "skipped"}
+    if not (args.homestead_only or args.miami_dade_only):
+        pc = _pull_pinecrest()
+    if pc["error"] and pc["error"] != "skipped":
+        overall_status = "partial"
+
+    # 4. Optional auto-send
     send: dict | None = None
     if auto_send:
         send = _send_letters(since_days=since_days)
         if send.get("error") or (send.get("failed") or 0) > 0:
             overall_status = "partial" if overall_status == "success" else overall_status
 
-    # 4. Compose summary + record
-    summary = _compose_summary(hs=hs, md=md, send=send,
+    # 5. Compose summary + record
+    summary = _compose_summary(hs=hs, md=md, pc=pc, send=send,
                                auto_send=auto_send, since_days=since_days)
     log.info("Summary:\n%s", summary)
 
@@ -234,11 +272,18 @@ def main(argv: list[str] | None = None) -> int:
         md_pulled=md["pulled"],
         md_in_scope=md["in_scope"],
         md_inserted=md["inserted"],
+        pinecrest_pulled=pc["pulled"],
+        pinecrest_in_scope=pc["in_scope"],
+        pinecrest_inserted=pc["inserted"],
         letters_eligible=(send or {}).get("considered", 0),
         letters_sent=(send or {}).get("sent", 0),
         letters_skipped=(send or {}).get("skipped", 0),
         letters_failed=(send or {}).get("failed", 0),
-        error_text=(hs["error"] or md["error"] or (send or {}).get("error")),
+        error_text=next(
+            (e for e in (hs["error"], md["error"], pc["error"], (send or {}).get("error"))
+             if e and e != "skipped"),
+            None,
+        ),
         summary_text=summary,
     )
 

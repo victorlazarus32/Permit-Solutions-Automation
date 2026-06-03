@@ -377,6 +377,9 @@ CREATE TABLE IF NOT EXISTS daily_runs (
     md_pulled            INTEGER NOT NULL DEFAULT 0,    -- raw rows MD scraper returned
     md_in_scope          INTEGER NOT NULL DEFAULT 0,
     md_inserted          INTEGER NOT NULL DEFAULT 0,
+    pinecrest_pulled     INTEGER NOT NULL DEFAULT 0,    -- raw rows eTRAKiT returned
+    pinecrest_in_scope   INTEGER NOT NULL DEFAULT 0,
+    pinecrest_inserted   INTEGER NOT NULL DEFAULT 0,
     letters_eligible     INTEGER NOT NULL DEFAULT 0,
     letters_sent         INTEGER NOT NULL DEFAULT 0,
     letters_skipped      INTEGER NOT NULL DEFAULT 0,
@@ -410,6 +413,20 @@ def init_db() -> None:
         _migrate_lead_intakes(conn)
         _migrate_invoices(conn)
         _migrate_violations(conn)
+        _migrate_daily_runs(conn)
+
+
+def _migrate_daily_runs(conn) -> None:
+    """Idempotent column adds for the daily_runs audit table."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(daily_runs)")}
+    additions = [
+        ("pinecrest_pulled",   "INTEGER NOT NULL DEFAULT 0"),
+        ("pinecrest_in_scope", "INTEGER NOT NULL DEFAULT 0"),
+        ("pinecrest_inserted", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    for col, ddl in additions:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE daily_runs ADD COLUMN {col} {ddl}")
 
 
 def _migrate_violations(conn) -> None:

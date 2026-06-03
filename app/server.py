@@ -56,7 +56,8 @@ from db import DB_PATH, init_db
 # and any UI that queries them blows up with "no such table".
 init_db()
 from scripts.morning_run import (run_miami_dade, run_homestead,
-                                  run_homestead_tyler, fetch_totals, run_send)
+                                  run_homestead_tyler, run_pinecrest_etrakit,
+                                  fetch_totals, run_send)
 
 LOG_FILE = PROJECT_ROOT / "data" / "morning_run.log"
 APP_LOG_FILE = PROJECT_ROOT / "data" / "operator_console.log"
@@ -1865,6 +1866,16 @@ def action_homestead_tyler():
         flash("Another task is already running. Wait for it to finish.", "warning")
     else:
         flash("Pulling new Homestead permit/zoning violations from the Tyler portal. "
+              "This takes about a minute.", "info")
+    return redirect(url_for("dashboard"))
+
+
+@app.post("/actions/pull-pinecrest")
+def action_pinecrest():
+    if not _start_task("pinecrest", run_pinecrest_etrakit):
+        flash("Another task is already running. Wait for it to finish.", "warning")
+    else:
+        flash("Pulling new Pinecrest code cases from the eTRAKiT portal. "
               "This takes about a minute.", "info")
     return redirect(url_for("dashboard"))
 
