@@ -402,14 +402,20 @@
     <button type="submit" {% if task.running %}disabled{% endif %}>Pull Pinecrest</button>
   </form>
 
+  <form method="POST" action="{{ url_for('action_palmetto_bay') }}" class="action-card">
+    <h3>4. Pull Palmetto Bay Pending Permits</h3>
+    <p>Pulls currently-pending PSS-trade permits (fence, window, door, garage, roof, shed, pergola) from the Village of Palmetto Bay's Eden portal. Each pending permit is a stalled job &mdash; the owner pulled a permit but never finaled it. Takes about two minutes (14 trade-type searches).</p>
+    <button type="submit" {% if task.running %}disabled{% endif %}>Pull Palmetto Bay</button>
+  </form>
+
   <form method="POST" action="{{ url_for('action_homestead') }}" class="action-card">
-    <h3>4. Process PRR Files</h3>
+    <h3>5. Process PRR Files</h3>
     <p>Ingests any PRR Excel files waiting in the inbox. <a href="{{ url_for('upload_prr') }}">Upload a new file</a> first if needed.</p>
     <button type="submit" {% if task.running %}disabled{% endif %}>Process PRR</button>
   </form>
 
   <form method="POST" action="{{ url_for('action_send') }}" class="action-card action-card-send" id="send-form">
-    <h3>5. Mail Today's Letters</h3>
+    <h3>6. Mail Today's Letters</h3>
     {% if not lob_ok %}
     <p class="lob-blocker">
       <strong>Lob is not configured yet.</strong> {{ lob_reason }}

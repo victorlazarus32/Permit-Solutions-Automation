@@ -235,6 +235,28 @@ def run_pinecrest_etrakit() -> dict:
                 "error": f"Pinecrest pull failed: {e}. Tell Victor."}
 
 
+def run_palmetto_bay_eden() -> dict:
+    """
+    Pull currently-pending PSS-trade permits from Palmetto Bay's Eden portal.
+    Idempotent — each run is a fresh snapshot of "what is still Pending right
+    now", upserted by permit number, so today's new permits get inserted and
+    yesterday's still-pending ones get last_seen_at refreshed.
+    """
+    from connectors.eden import run as eden_run
+
+    try:
+        s = eden_run("palmetto_bay")
+        return {"fetched":  s.get("fetched", 0),
+                "in_scope": s.get("in_scope", 0),
+                "inserted": s.get("inserted", 0),
+                "updated":  s.get("updated", 0),
+                "error":    None}
+    except Exception as e:
+        logging.exception("palmetto bay Eden run failed")
+        return {"fetched": 0, "in_scope": 0, "inserted": 0, "updated": 0,
+                "error": f"Palmetto Bay pull failed: {e}. Tell Victor."}
+
+
 # ---------------------------------------------------------------------------
 # Step 3 — Show totals + confirm + send
 # ---------------------------------------------------------------------------
@@ -345,7 +367,7 @@ def main() -> int:
                  f"{ht['inserted']} new permit/zoning leads added")
 
         # --- Step 3: Pinecrest eTRAKiT (live portal pull)
-        step(3, 5, "Pulling new Pinecrest cases from eTRAKiT portal...")
+        step(3, 6, "Pulling new Pinecrest cases from eTRAKiT portal...")
         pc = run_pinecrest_etrakit()
         if pc["error"]:
             friendly_error("Pinecrest pull didn't work",
@@ -355,8 +377,19 @@ def main() -> int:
             info(f"{pc['fetched']} cases checked, "
                  f"{pc['inserted']} new in-scope leads added")
 
-        # --- Step 4: Homestead PRR Excel inbox (legacy fallback)
-        step(4, 5, "Processing Homestead PRR spreadsheets...")
+        # --- Step 4: Palmetto Bay Eden (live portal pull)
+        step(4, 6, "Pulling pending Palmetto Bay permits from Eden portal...")
+        pb = run_palmetto_bay_eden()
+        if pb["error"]:
+            friendly_error("Palmetto Bay pull didn't work",
+                           pb["error"],
+                           "The other steps still worked. Tell Victor about Palmetto Bay.")
+        else:
+            info(f"{pb['fetched']} pending permits checked, "
+                 f"{pb['inserted']} new leads added")
+
+        # --- Step 5: Homestead PRR Excel inbox (legacy fallback)
+        step(5, 6, "Processing Homestead PRR spreadsheets...")
         hs = run_homestead()
         if hs["error"]:
             friendly_error("Homestead files didn't process",
@@ -367,8 +400,8 @@ def main() -> int:
         else:
             info(f"{hs['files']} file(s) processed — {hs['inserted']} new records added")
 
-        # --- Step 5: Totals + confirm + send
-        step(5, 5, "Today's numbers")
+        # --- Step 6: Totals + confirm + send
+        step(6, 6, "Today's numbers")
         totals = fetch_totals()
         info(f"Total cases in system  : {totals['total']}")
         info(f"Ready to mail          : {totals['ready']}")

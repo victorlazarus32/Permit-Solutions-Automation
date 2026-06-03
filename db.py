@@ -380,6 +380,9 @@ CREATE TABLE IF NOT EXISTS daily_runs (
     pinecrest_pulled     INTEGER NOT NULL DEFAULT 0,    -- raw rows eTRAKiT returned
     pinecrest_in_scope   INTEGER NOT NULL DEFAULT 0,
     pinecrest_inserted   INTEGER NOT NULL DEFAULT 0,
+    palmetto_bay_pulled  INTEGER NOT NULL DEFAULT 0,    -- raw rows Eden returned
+    palmetto_bay_in_scope INTEGER NOT NULL DEFAULT 0,
+    palmetto_bay_inserted INTEGER NOT NULL DEFAULT 0,
     letters_eligible     INTEGER NOT NULL DEFAULT 0,
     letters_sent         INTEGER NOT NULL DEFAULT 0,
     letters_skipped      INTEGER NOT NULL DEFAULT 0,
@@ -420,9 +423,12 @@ def _migrate_daily_runs(conn) -> None:
     """Idempotent column adds for the daily_runs audit table."""
     existing = {row[1] for row in conn.execute("PRAGMA table_info(daily_runs)")}
     additions = [
-        ("pinecrest_pulled",   "INTEGER NOT NULL DEFAULT 0"),
-        ("pinecrest_in_scope", "INTEGER NOT NULL DEFAULT 0"),
-        ("pinecrest_inserted", "INTEGER NOT NULL DEFAULT 0"),
+        ("pinecrest_pulled",      "INTEGER NOT NULL DEFAULT 0"),
+        ("pinecrest_in_scope",    "INTEGER NOT NULL DEFAULT 0"),
+        ("pinecrest_inserted",    "INTEGER NOT NULL DEFAULT 0"),
+        ("palmetto_bay_pulled",   "INTEGER NOT NULL DEFAULT 0"),
+        ("palmetto_bay_in_scope", "INTEGER NOT NULL DEFAULT 0"),
+        ("palmetto_bay_inserted", "INTEGER NOT NULL DEFAULT 0"),
     ]
     for col, ddl in additions:
         if col not in existing:
