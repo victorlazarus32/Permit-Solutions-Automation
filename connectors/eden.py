@@ -47,7 +47,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -61,6 +61,13 @@ AUDIT_ROOT = PROJECT_ROOT / "audit"
 
 PAGE_LOAD_TIMEOUT_MS = 45_000
 POST_SUBMIT_WAIT_MS = 2_500
+
+# How recent a pending permit has to be to qualify as a PSS lead. Older rows
+# get dropped during parsing. Eden's pending list is a snapshot of everything
+# currently in the city's pipeline, including 15-year-old abandoned permits;
+# the operator only wants the freshest applicants who haven't fully locked
+# in with their original contractor yet.
+MAX_APPLICATION_AGE_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -227,7 +234,9 @@ def _scrape_all_scope(t: EdenTenant, *, log: logging.Logger) -> tuple[list[dict]
 def _records_from_rows(t: EdenTenant, rows: list[dict],
                        *, log: logging.Logger) -> list[dict]:
     """Build canonical violation records from scraped Eden rows."""
+    cutoff = date.today() - timedelta(days=MAX_APPLICATION_AGE_DAYS)
     records: list[dict] = []
+    too_old = 0
     for r in rows:
         case_no = r["permit_no"]
         if not case_no:
@@ -250,11 +259,25 @@ def _records_from_rows(t: EdenTenant, rows: list[dict],
             raw_source_file=f"eden:{t.portal_host}",
             skip_filter=True,
         )
-        if rec is not None:
-            # Stamp the trade scope (the search-input label) into
-            # matched_keywords so the report cross-tab continues to work.
-            rec["matched_keywords"] = (r.get("scope_label") or "").lower()
-            records.append(rec)
+        if rec is None:
+            continue
+        # Age gate: drop anything filed before the cutoff. open_date arrives
+        # from build_record already normalized to ISO YYYY-MM-DD.
+        od = rec.get("open_date")
+        try:
+            if not od or date.fromisoformat(od) < cutoff:
+                too_old += 1
+                continue
+        except ValueError:
+            too_old += 1
+            continue
+        # Stamp the trade scope (the search-input label) into
+        # matched_keywords so the report cross-tab continues to work.
+        rec["matched_keywords"] = (r.get("scope_label") or "").lower()
+        records.append(rec)
+    if too_old:
+        log.info("dropped %d rows older than %d days (cutoff %s)",
+                 too_old, MAX_APPLICATION_AGE_DAYS, cutoff)
     return records
 
 
