@@ -1907,24 +1907,42 @@ def upload_prr():
         f.save(str(dest))
         log.info("PRR uploaded by %s: %s -> %s", session.get("user"), f.filename, dest)
 
-        # Auto-fulfill: when an operator uploads the Excel response to a PRR,
-        # close the most recent open PRR for that city in one shot and queue
-        # the next round. This is the "minimize the gap" mechanic — the
-        # operator never has to think about which PRR this file fulfills or
-        # when to send the next one.
+        # Auto-ingest if the city has a connector that knows how to parse its
+        # export. City of Miami is the first city wired up; the others still
+        # require operator review of the column map before processing.
+        ingest_summary = _dispatch_prr_ingest(city, dest)
+
+        # Auto-fulfill: close the most recent open PRR for that city in one
+        # shot and queue the next round. This is the "minimize the gap"
+        # mechanic — the operator never has to think about which PRR this
+        # file fulfills or when to send the next one.
         fulfilled, next_due = _autofulfill_latest_prr(city)
-        if fulfilled:
+
+        pretty = city.replace("_", " ").title()
+        if ingest_summary:
+            msg = (
+                f"Processed {safe_name} for {pretty}: "
+                f"{ingest_summary.get('inserted', 0)} new leads, "
+                f"{ingest_summary.get('updated', 0)} updated, "
+                f"{ingest_summary.get('closed_flagged', 0)} auto-flagged closed, "
+                f"{ingest_summary.get('enriched', 0)} owners enriched."
+            )
+            if fulfilled:
+                msg += (f" PRR #{fulfilled['reference_number'] or fulfilled['id']} "
+                        f"auto-closed; next due {next_due}.")
+            flash(msg, "success")
+        elif fulfilled:
             flash(
                 f"Uploaded {safe_name} → auto-closed PRR "
                 f"#{fulfilled['reference_number'] or fulfilled['id']} for "
-                f"{city.replace('_',' ').title()}. Next PRR due "
-                f"{next_due}. Click Process PRR on the dashboard to ingest.",
+                f"{pretty}. Next PRR due {next_due}. "
+                f"Click Process PRR on the dashboard to ingest.",
                 "success",
             )
         else:
             flash(
-                f"Uploaded {safe_name} to the {city.replace('_',' ').title()} "
-                f"inbox. Click Process PRR on the dashboard to ingest it.",
+                f"Uploaded {safe_name} to the {pretty} inbox. "
+                f"Click Process PRR on the dashboard to ingest it.",
                 "success",
             )
         return redirect(url_for("dashboard"))
@@ -1938,6 +1956,26 @@ def upload_prr():
 # (PRR_CADENCE_DAYS) controls how soon the next round is due; the operator
 # console highlights anything past that date as a follow-up action.
 # ---------------------------------------------------------------------------
+
+def _dispatch_prr_ingest(city: str, path) -> dict | None:
+    """
+    If a city has a dedicated connector that knows how to parse its export,
+    call it directly so the operator doesn't have to click Process PRR.
+    Returns the connector's summary dict, or None if no auto-ingest is wired.
+
+    Add new cities here as their column maps get tightened from real exports.
+    """
+    if city == "city_of_miami":
+        from connectors.city_of_miami import process_file as _process
+        from pathlib import Path
+        try:
+            return _process(Path(str(path)))
+        except Exception as e:
+            log.exception("city_of_miami auto-ingest failed for %s: %s", path, e)
+            flash(f"Auto-ingest failed: {e}. File saved; try Process PRR.", "warning")
+            return None
+    return None
+
 
 def _autofulfill_latest_prr(city: str) -> tuple[dict | None, str | None]:
     """
