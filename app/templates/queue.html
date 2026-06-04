@@ -5,13 +5,8 @@
 <section class="hero page-intro">
   <div class="lead-hero-row">
     <div>
-      <div class="eyebrow">
-        Letter Queue
-        <span class="eyebrow-sep"></span>
-        <span class="eyebrow-dim">{{ count }} ready</span>
-      </div>
-      <h1>Ready to mail<span class="accent">.</span></h1>
-      <p class="hero-sub">{{ count }} letter{% if count != 1 %}s{% endif %} queued, sorted newest first. Address verification status shown per row.</p>
+      <h1>Letter Queue <span class="hero-count">&middot; {{ count }} ready</span></h1>
+      <p class="hero-sub">Sorted newest first. Address verification status shown per row.</p>
     </div>
     {% if rows %}
     <form method="POST" action="{{ url_for('action_verify_queue') }}" style="margin: 0;">

@@ -4,17 +4,13 @@
 {% block content %}
 
 <section class="hero page-intro">
-  <div class="eyebrow">
-    Operator Console
-    <span class="eyebrow-sep"></span>
-    <span class="eyebrow-dim">{{ today }}</span>
+  <div>
+    <h1>Operator Console</h1>
+    <p class="hero-sub">{{ today }}</p>
   </div>
-  <h1>Operate today&rsquo;s mailings<span class="accent">.</span></h1>
-  <p class="hero-sub">Pull fresh violations, queue the right letters, mail them clean. Every action below is logged and reversible.</p>
   <div class="intro-meta">
     <span class="pulse-dot">System Live</span>
   </div>
-  <hr class="hero-rule">
 </section>
 
 {% if task.running and task.kind == 'send' %}
