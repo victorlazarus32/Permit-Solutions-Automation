@@ -25,62 +25,152 @@
 </section>
 
 {% if rows %}
-<table class="data-table sortable">
-  <thead>
-    <tr>
-      <th data-sort="source">Source</th>
-      <th data-sort="case">Case #</th>
-      <th data-sort="open">Open Date</th>
-      <th data-sort="addr">Property Address</th>
-      <th data-sort="owner">Owner</th>
-      <th>Matched Keywords</th>
-      <th>Address Check</th>
-      <th>Violation Summary</th>
-      <th class="col-actions">Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in rows %}
-    <tr>
-      <td>{{ r.source.replace('_', ' ') }}</td>
-      <td><a class="mono case-link" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">{{ r.case_number }}</a></td>
-      <td>{{ r.open_date or '' }}</td>
-      <td>{{ r.property_address or '' }}</td>
-      <td>{{ r.owner_full_name or '' }}</td>
-      <td>
-        {% if r.matched_keywords %}
-          {% for kw in r.matched_keywords.split(',') %}<span class="kw-chip">{{ kw }}</span>{% endfor %}
-        {% endif %}
-      </td>
-      <td>
-        {% set dlv = r.lob_address_deliverability %}
-        {% if not dlv %}
-          <span class="status" title="Not yet verified — runs at send time">unchecked</span>
-        {% elif dlv == 'deliverable' %}
-          <span class="status status-mailed" title="USPS-confirmed">deliverable</span>
-        {% elif dlv == 'undeliverable' %}
-          <span class="status status-error" title="Lob says USPS would return this — fix or skip">undeliverable</span>
-        {% else %}
-          <span class="status status-warning" title="{{ dlv.replace('_', ' ') }}">{{ dlv.replace('deliverable_', '').replace('_', ' ') }}</span>
-        {% endif %}
-      </td>
-      <td class="cell-narrative">{{ (r.alleged_violation or '')[:200] }}{% if r.alleged_violation and r.alleged_violation|length > 200 %}...{% endif %}</td>
-      <td class="col-actions">
-        <a class="btn btn-secondary btn-tiny" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">Open</a>
-        <form method="POST"
-              action="{{ url_for('action_queue_remove', source=r.source, case_number=r.case_number) }}"
-              style="display: inline; margin: 0;"
-              onsubmit="return confirm('Remove {{ r.case_number }} from the mail queue?\n\nThe record stays on file — you can restore it from the lead detail page.');">
-          <button type="submit" class="btn btn-secondary btn-tiny"
+<form id="queue-bulk-form" method="POST" action="{{ url_for('action_queue_bulk_remove') }}">
+
+  <div id="queue-bulk-bar" class="queue-bulk-bar" hidden>
+    <div class="qbb-count">
+      <span id="qbb-count-num">0</span>
+      <span class="qbb-count-label">selected</span>
+    </div>
+    <div class="qbb-actions">
+      <button type="button" class="btn-secondary qbb-clear" id="qbb-clear-btn">Clear</button>
+      <button type="submit" class="btn-primary qbb-remove" id="qbb-remove-btn">Remove selected</button>
+    </div>
+  </div>
+
+  <table class="data-table sortable">
+    <thead>
+      <tr>
+        <th class="col-check">
+          <input type="checkbox" id="qbb-select-all" aria-label="Select all rows">
+        </th>
+        <th data-sort="source">Source</th>
+        <th data-sort="case">Case #</th>
+        <th data-sort="open">Open Date</th>
+        <th data-sort="addr">Property Address</th>
+        <th data-sort="owner">Owner</th>
+        <th>Matched Keywords</th>
+        <th>Address Check</th>
+        <th>Violation Summary</th>
+        <th class="col-actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="col-check">
+          <input type="checkbox" class="qbb-row" name="rows"
+                 value="{{ r.source }}|{{ r.case_number }}"
+                 aria-label="Select {{ r.case_number }}">
+        </td>
+        <td>{{ r.source.replace('_', ' ') }}</td>
+        <td><a class="mono case-link" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">{{ r.case_number }}</a></td>
+        <td>{{ r.open_date or '' }}</td>
+        <td>{{ r.property_address or '' }}</td>
+        <td>{{ r.owner_full_name or '' }}</td>
+        <td>
+          {% if r.matched_keywords %}
+            {% for kw in r.matched_keywords.split(',') %}<span class="kw-chip">{{ kw }}</span>{% endfor %}
+          {% endif %}
+        </td>
+        <td>
+          {% set dlv = r.lob_address_deliverability %}
+          {% if not dlv %}
+            <span class="status" title="Not yet verified — runs at send time">unchecked</span>
+          {% elif dlv == 'deliverable' %}
+            <span class="status status-mailed" title="USPS-confirmed">deliverable</span>
+          {% elif dlv == 'undeliverable' %}
+            <span class="status status-error" title="Lob says USPS would return this — fix or skip">undeliverable</span>
+          {% else %}
+            <span class="status status-warning" title="{{ dlv.replace('_', ' ') }}">{{ dlv.replace('deliverable_', '').replace('_', ' ') }}</span>
+          {% endif %}
+        </td>
+        <td class="cell-narrative">{{ (r.alleged_violation or '')[:200] }}{% if r.alleged_violation and r.alleged_violation|length > 200 %}...{% endif %}</td>
+        <td class="col-actions">
+          <a class="btn btn-secondary btn-tiny" href="{{ url_for('lead_detail', source=r.source, case_number=r.case_number) }}">Open</a>
+          <button type="button" class="btn btn-secondary btn-tiny qbb-row-remove"
+                  data-remove-url="{{ url_for('action_queue_remove', source=r.source, case_number=r.case_number) }}"
+                  data-case-no="{{ r.case_number }}"
                   title="Skip this letter — keeps the record, never mails it.">
             Remove
           </button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Per-row delete falls through to a dedicated single-row endpoint when
+       Remove is clicked. Done via JS to keep the row checkboxes inside the
+       outer bulk-form without nesting forms. -->
+</form>
+
+<script>
+(function() {
+  var form    = document.getElementById('queue-bulk-form');
+  if (!form) return;
+  var bar     = document.getElementById('queue-bulk-bar');
+  var countEl = document.getElementById('qbb-count-num');
+  var checks  = function() { return Array.prototype.slice.call(form.querySelectorAll('.qbb-row')); };
+  var selAll  = document.getElementById('qbb-select-all');
+  var clearBtn= document.getElementById('qbb-clear-btn');
+
+  function refresh() {
+    var picked = checks().filter(function(c) { return c.checked; }).length;
+    countEl.textContent = picked;
+    bar.hidden = picked === 0;
+    bar.classList.toggle('qbb-on', picked > 0);
+    // sync the master checkbox state
+    if (picked === 0)                      { selAll.checked = false; selAll.indeterminate = false; }
+    else if (picked === checks().length)   { selAll.checked = true;  selAll.indeterminate = false; }
+    else                                   { selAll.checked = false; selAll.indeterminate = true;  }
+  }
+
+  // master checkbox flips all row checkboxes
+  selAll.addEventListener('change', function() {
+    checks().forEach(function(c) { c.checked = selAll.checked; });
+    refresh();
+  });
+  // each row checkbox updates the bar
+  checks().forEach(function(c) { c.addEventListener('change', refresh); });
+
+  // Clear button uncheks everything
+  clearBtn.addEventListener('click', function() {
+    checks().forEach(function(c) { c.checked = false; });
+    refresh();
+  });
+
+  // Bulk-remove confirm
+  form.addEventListener('submit', function(e) {
+    var picked = checks().filter(function(c) { return c.checked; }).length;
+    if (picked === 0) { e.preventDefault(); return; }
+    var msg = "Remove " + picked + " letter" + (picked === 1 ? "" : "s") +
+              " from the mail queue?\n\n" +
+              "Records stay on file — restore individually from a lead detail page.";
+    if (!confirm(msg)) { e.preventDefault(); }
+  });
+
+  // Per-row Remove buttons: each carries its own server-rendered POST URL.
+  // We build a one-off form, submit, the server redirects back to /queue.
+  form.addEventListener('click', function(e) {
+    var btn = e.target.closest('.qbb-row-remove');
+    if (!btn) return;
+    e.preventDefault();
+    var url = btn.getAttribute('data-remove-url');
+    var cn  = btn.getAttribute('data-case-no');
+    if (!url) return;
+    if (!confirm("Remove " + (cn || "this letter") + " from the mail queue?\n\nThe record stays on file — you can restore it from the lead detail page.")) return;
+    var f = document.createElement('form');
+    f.method = 'POST'; f.action = url;
+    document.body.appendChild(f);
+    f.submit();
+  });
+
+  // initial state
+  refresh();
+})();
+</script>
+
 {% else %}
 <p class="empty-state">No letters are queued. Pull new cases from the dashboard to populate the queue.</p>
 {% endif %}

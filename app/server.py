@@ -2297,6 +2297,49 @@ def action_queue_remove(source: str, case_number: str):
     return redirect(request.referrer or url_for("queue"))
 
 
+@app.post("/actions/queue/bulk-remove")
+def action_queue_bulk_remove():
+    """
+    Soft-skip multiple queued letters in a single submit. The form posts
+    `rows` as a multi-value field where each value is encoded as
+    `source|case_number`. Same do_not_mail semantics as the single-row
+    endpoint — records stay on file, can be restored individually from
+    the lead detail page.
+    """
+    raw = request.form.getlist("rows")
+    pairs: list[tuple[str, str]] = []
+    for token in raw:
+        if "|" not in token:
+            continue
+        source, case_number = token.split("|", 1)
+        source = source.strip()
+        case_number = case_number.strip()
+        if source and case_number:
+            pairs.append((source, case_number))
+    if not pairs:
+        flash("No rows selected.", "warning")
+        return redirect(url_for("queue"))
+
+    reason = (request.form.get("reason") or "").strip() or None
+    now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    removed = 0
+    with sqlite3.connect(DB_PATH) as conn:
+        for source, case_number in pairs:
+            cur = conn.execute(
+                "UPDATE violations SET do_not_mail = 1, do_not_mail_reason = ?, do_not_mail_at = ? "
+                "WHERE source = ? AND case_number = ? AND (do_not_mail IS NULL OR do_not_mail = 0)",
+                (reason, now, source, case_number),
+            )
+            removed += cur.rowcount
+        conn.commit()
+    flash(
+        f"Removed {removed} letter{'s' if removed != 1 else ''} from the queue. "
+        f"Records stay on file — restore individually from a lead detail page.",
+        "success",
+    )
+    return redirect(url_for("queue"))
+
+
 @app.post("/actions/queue/restore/<source>/<case_number>")
 def action_queue_restore(source: str, case_number: str):
     """Undo a remove — clears the do_not_mail flag so the row returns to the queue."""
