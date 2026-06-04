@@ -1765,264 +1765,358 @@ details[open] .intake-section-title::after { content: "−"; background: var(--i
 
 
 /* =====================================================================
-   EDITORIAL REFRESH — 2026-06-03
-   Layered on top of the base system. Goal: alive, organic, restrained.
-   Display serif (Fraunces) for hero moments + section eyebrows. Nothing
-   here removes functionality — it only adds personality.
+   BRAND ALIGNMENT — 2026-06-03 (supersedes the Fraunces editorial pass)
+   Aligns the Operator Console with the marketing site's documented
+   design system (see PERMITSOLUTIONSWEBSITE/02_DESIGN_SYSTEM.md +
+   05_CSS_EMBED.md).
+
+   Three colors. One font (Inter). No drop shadows on cards. 6px button
+   radius. Hairline dividers. Big tabular-num stats. Eyebrows everywhere.
+
+   This intentionally OVERRIDES brand tokens defined earlier in this
+   file so cascading components inherit the marketing-site palette.
 ===================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..800,0..100&display=swap');
-
 :root {
-  --display: 'Fraunces', 'Iowan Old Style', 'Georgia', serif;
+  /* Marketing-site palette — three colors */
+  --brand-orange:        #E85D1F;
+  --brand-orange-2:      #C44A14;
+  --brand-orange-soft:   #FFE9DC;
+  --brand-navy:          #0F1115;
+  --brand-navy-2:        #2A2E36;
+  --brand-navy-soft:     #E2E2DE;
+
+  /* Surfaces */
+  --bg:                  #F8F8F6;
+  --bg-soft:             #EFEEEA;
+  --surface:             #FFFFFF;
+  --surface-2:           #FBFBF9;
+  --border:              #E8E6E0;
+  --border-hi:           #D4D2CB;
+
+  /* Text */
+  --ink:                 #0F1115;
+  --ink-2:               #2A2E36;
+  --ink-mute:            #5B6470;
+  --ink-dim:             #8A929C;
+
+  /* Aliases */
+  --indigo:              var(--brand-orange);
+  --indigo-soft:         var(--brand-orange-soft);
+  --orange:              var(--brand-orange);
+  --orange-soft:         var(--brand-orange-soft);
+
+  /* Display font = Inter (NOT a serif — brand uses one face) */
+  --display: 'Inter', system-ui, -apple-system, sans-serif;
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-bounce:   cubic-bezier(0.5, 1.6, 0.6, 1);
-  --highlight-cream: linear-gradient(180deg, transparent 62%, rgba(252,132,24,0.22) 62%, rgba(252,132,24,0.22) 92%, transparent 92%);
 }
 
-/* ===== Eyebrow ===== */
+body {
+  /* Strip the warm radial gradients the legacy bg had — brand calls for a
+     flat off-white. */
+  background-color: var(--bg);
+  background-image: none;
+}
+
+/* ===== Eyebrow — marketing-site canonical spec (14px Inter 600 UPPER) ===== */
 .eyebrow {
-  display: inline-flex; align-items: center; gap: 10px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
-  font-weight: 600; color: var(--brand-navy);
-  margin-bottom: 14px;
+  display: inline-flex; align-items: center; gap: 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  font-weight: 600; color: var(--ink-mute);
+  margin-bottom: 24px;
 }
 .eyebrow::before {
-  content: ""; width: 24px; height: 2px;
+  content: ""; width: 28px; height: 1px;
   background: var(--brand-orange); display: inline-block;
 }
 .eyebrow .eyebrow-sep {
-  width: 4px; height: 4px; background: var(--ink-dim);
+  width: 3px; height: 3px; background: var(--ink-dim);
   border-radius: 50%; display: inline-block;
 }
-.eyebrow .eyebrow-dim { color: var(--ink-mute); font-weight: 500; }
+.eyebrow .eyebrow-dim { color: var(--ink-dim); font-weight: 500; }
 
-/* ===== Hero ===== */
+/* ===== Hero — Inter 700, big confident, single orange accent ===== */
 .hero h1 {
-  font-family: var(--display);
-  font-optical-sizing: auto;
-  font-variation-settings: "SOFT" 60, "wght" 600;
+  font-family: 'Inter', system-ui, sans-serif !important;
   font-size: clamp(40px, 5.4vw, 64px);
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.04;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
   background: none !important;
   -webkit-background-clip: initial !important;
   background-clip: initial !important;
   color: var(--ink) !important;
-  margin: 0 0 12px 0;
+  margin: 0 0 16px 0;
+  max-width: 720px;
 }
-.hero h1 .marker {
-  background-image: var(--highlight-cream);
-  padding: 0 4px;
-}
+/* Single accent: usually an orange period/punctuation at the end. */
 .hero h1 .accent {
   color: var(--brand-orange);
-  font-style: italic;
-  font-variation-settings: "SOFT" 80, "wght" 500;
+  font-style: normal;
+  font-weight: 700;
 }
+/* Strip the cream-marker treatment — brand wants restraint. */
+.hero h1 .marker { background-image: none; padding: 0; }
+
 .hero-sub {
-  font-size: 16px; line-height: 1.55;
-  color: var(--ink-2); max-width: 680px;
-  margin-top: 4px;
+  font-size: 17px; line-height: 1.6;
+  color: var(--ink-mute); max-width: 600px;
+  margin-top: 0;
 }
 .hero-rule {
-  display: block; margin: 22px 0 0; border: none;
+  display: block; margin: 32px 0 0; border: none;
   height: 1px; width: 100%;
-  background: linear-gradient(90deg,
-    var(--brand-orange) 0%, var(--brand-orange) 56px,
-    var(--border) 56px, var(--border) 100%);
+  background: var(--border);
 }
 
-/* ===== Topnav animated underline ===== */
+/* ===== Topnav — animated orange underline ===== */
 .topnav a {
   position: relative; border-radius: 0;
   background: none !important;
   padding: 10px 14px 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 .topnav a::after {
   content: "";
   position: absolute; left: 14px; right: 14px; bottom: 6px;
-  height: 2px; background: var(--brand-orange);
+  height: 1.5px; background: var(--brand-orange);
   transform: scaleX(0); transform-origin: left center;
-  transition: transform 0.32s var(--ease-out-soft);
+  transition: transform 0.28s var(--ease-out-soft);
 }
 .topnav a:hover { background: transparent !important; color: var(--ink); }
-.topnav a:hover::after { transform: scaleX(0.45); }
-.topnav a.active { color: var(--ink); background: transparent !important; }
+.topnav a:hover::after { transform: scaleX(0.4); }
+.topnav a.active { color: var(--ink); background: transparent !important; font-weight: 600; }
 .topnav a.active::after { transform: scaleX(1); }
 
-/* ===== Section heading with auto-counter ===== */
+/* ===== Section heading — eyebrow style with hairline ===== */
 .container { counter-reset: section; }
 .section-heading {
   position: relative;
-  display: flex; align-items: baseline; gap: 14px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  text-transform: uppercase; letter-spacing: 0.18em;
-  font-size: 11.5px; font-weight: 600;
+  display: flex; align-items: center; gap: 16px;
+  font-family: 'Inter', system-ui, sans-serif;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 13px; font-weight: 600;
   color: var(--ink-mute);
-  margin: 56px 0 22px;
+  margin: 80px 0 32px;
   counter-increment: section;
 }
 .section-heading::before {
-  content: "\00a7 " counter(section, decimal-leading-zero);
-  color: var(--brand-orange); font-weight: 700;
+  content: counter(section, decimal-leading-zero) " ";
+  color: var(--brand-orange);
+  font-weight: 600;
   letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 .section-heading::after {
   content: ""; flex: 1; height: 1px;
-  background:
-    linear-gradient(90deg, var(--border) 0%, var(--border) calc(100% - 80px),
-                    var(--brand-orange) calc(100% - 80px), var(--brand-orange) calc(100% - 76px),
-                    var(--border) calc(100% - 76px), var(--border) calc(100% - 42px),
-                    var(--brand-orange) calc(100% - 42px), var(--brand-orange) calc(100% - 38px),
-                    var(--border) calc(100% - 38px), var(--border) 100%);
+  background: var(--border);
   margin-left: 4px;
 }
 
-/* ===== Stat strip ===== */
+/* ===== Stat strip — Inter 700, tabular nums, NO shadow ===== */
 .stat-strip .stat {
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
   position: relative; overflow: hidden;
-  transition: transform 0.32s var(--ease-out-soft), box-shadow 0.32s var(--ease-out-soft);
+  box-shadow: none !important;
+  transition: border-color 0.2s ease;
 }
-.stat-strip .stat::after {
-  content: "";
-  position: absolute; right: -18px; top: -18px;
-  width: 60px; height: 60px; border-radius: 50%;
-  background: radial-gradient(circle at center, rgba(252,132,24,0.10) 0%, transparent 70%);
-  transition: transform 0.4s var(--ease-out-soft);
+.stat-strip .stat::after { display: none; }  /* kill the radial gradient hover blob */
+.stat-strip .stat:hover {
+  transform: none;
+  box-shadow: none !important;
+  border-color: var(--border-hi);
 }
-.stat-strip .stat:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
-.stat-strip .stat:hover::after { transform: scale(1.6); }
 .stat-strip .stat-label {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.18em; text-transform: uppercase;
-  font-size: 10px; color: var(--ink-mute); font-weight: 600;
+  font-family: 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  font-size: 12px; color: var(--ink-mute); font-weight: 600;
 }
 .stat-strip .stat-value {
-  font-family: var(--display);
-  font-variation-settings: "SOFT" 40, "wght" 500;
-  font-size: 44px; line-height: 1;
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 52px; line-height: 1;
   color: var(--ink); letter-spacing: -0.02em;
-  margin: 8px 0 4px;
+  margin: 12px 0 6px;
+}
+.stat-strip .stat-foot {
+  font-size: 12.5px; color: var(--ink-mute);
 }
 
-/* ===== Action cards ===== */
+/* ===== Action cards — clean, no shadow, hairline border ===== */
 .action-card {
-  border-radius: 16px; background: var(--surface);
+  border-radius: 8px;
+  background: var(--surface);
   border: 1px solid var(--border);
   position: relative; overflow: hidden;
-  transition: transform 0.36s var(--ease-out-soft), box-shadow 0.36s var(--ease-out-soft), border-color 0.36s var(--ease-out-soft);
+  box-shadow: none !important;
+  transition: border-color 0.2s ease;
 }
 .action-card::before {
   content: "";
-  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
   background: var(--brand-orange);
   transform: scaleY(0); transform-origin: top center;
-  transition: transform 0.42s var(--ease-out-soft);
+  transition: transform 0.36s var(--ease-out-soft);
   opacity: 1 !important; border-radius: 0 !important;
 }
 .action-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--border-hi);
-  box-shadow: 0 14px 36px -22px rgba(36,48,60,0.25);
+  transform: none;
+  box-shadow: none !important;
+  border-color: var(--ink);
 }
 .action-card:hover::before { transform: scaleY(1); }
 .action-card h3 {
-  font-family: var(--display);
-  font-variation-settings: "SOFT" 30, "wght" 600;
-  font-size: 19px; letter-spacing: -0.005em; color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.25;
+  margin-bottom: 8px;
 }
 .action-card p {
-  color: var(--ink-2); font-size: 13.5px; line-height: 1.55;
+  color: var(--ink-mute);
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-/* ===== Buttons ===== */
+/* ===== Buttons — brand-aligned, flat, 6px, single transition ===== */
 button[type="submit"]:not(.btn-tiny):not(.btn-secondary):not(.toast-close),
 .btn-primary {
-  background: var(--brand-navy); color: #fff; border: none;
-  padding: 12px 22px 14px; border-radius: 10px;
+  background: var(--brand-orange);
+  color: #fff;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 6px;
   font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 600; font-size: 13.5px; letter-spacing: 0.02em;
-  cursor: pointer; position: relative;
-  transition: transform 0.18s var(--ease-out-soft), background 0.18s var(--ease-out-soft), box-shadow 0.18s var(--ease-out-soft);
-  box-shadow: 0 4px 10px -6px rgba(36,48,60,0.5);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s ease;
+  box-shadow: none !important;
 }
 button[type="submit"]:not(.btn-tiny):not(.btn-secondary):not(.toast-close)::after,
-.btn-primary::after {
-  content: "";
-  position: absolute; left: 22px; right: 22px; bottom: 4px;
-  height: 2px; background: var(--brand-orange);
-  transform: scaleX(0.4); transform-origin: left center;
-  transition: transform 0.32s var(--ease-out-soft);
-  border-radius: 1px;
-}
+.btn-primary::after { display: none; }
 button[type="submit"]:not(.btn-tiny):not(.btn-secondary):not(.toast-close):hover,
 .btn-primary:hover {
-  background: #15202b; transform: translateY(-1px);
-  box-shadow: 0 10px 20px -10px rgba(36,48,60,0.5);
+  background: var(--brand-orange-2);
+  transform: none;
+  box-shadow: none !important;
 }
-button[type="submit"]:not(.btn-tiny):not(.btn-secondary):not(.toast-close):hover::after,
-.btn-primary:hover::after { transform: scaleX(1); }
 button[type="submit"]:not(.btn-tiny):not(.btn-secondary):not(.toast-close):disabled,
-.btn-primary:disabled { background: var(--bg-soft); color: var(--ink-dim); box-shadow: none; cursor: not-allowed; }
-button[type="submit"]:not(.btn-tiny):not(.btn-secondary):not(.toast-close):disabled::after,
-.btn-primary:disabled::after { display: none; }
+.btn-primary:disabled {
+  background: var(--bg-soft);
+  color: var(--ink-dim);
+  cursor: not-allowed;
+}
 
 .btn-secondary {
-  background: transparent; border: 1px solid var(--border-hi);
-  color: var(--ink); padding: 10px 16px; border-radius: 10px;
-  font-weight: 600; font-size: 13px; letter-spacing: 0.01em;
-  transition: all 0.18s var(--ease-out-soft); cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  padding: 12px 22px;
+  border-radius: 6px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600; font-size: 14px;
+  letter-spacing: 0.01em;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .btn-secondary:hover {
-  border-color: var(--brand-orange); color: var(--brand-orange);
-  transform: translateX(2px); text-decoration: none;
+  background: var(--ink);
+  color: #fff;
+  text-decoration: none;
+  transform: none;
+  border-color: var(--ink);
 }
 
-/* ===== Live pulse dot ===== */
+/* ===== Live pulse dot — restrained green ping ===== */
 .pulse-dot {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-mute); font-weight: 600;
 }
 .pulse-dot::before {
   content: ""; width: 8px; height: 8px; border-radius: 50%;
-  background: #10b981; box-shadow: 0 0 0 0 rgba(16,185,129,0.6);
+  background: #10b981; box-shadow: 0 0 0 0 rgba(16,185,129,0.55);
   animation: pulse-keys 2.4s infinite;
 }
 @keyframes pulse-keys {
   0%   { box-shadow: 0 0 0 0   rgba(16,185,129,0.55); }
-  60%  { box-shadow: 0 0 0 12px rgba(16,185,129,0);    }
+  60%  { box-shadow: 0 0 0 10px rgba(16,185,129,0);    }
   100% { box-shadow: 0 0 0 0   rgba(16,185,129,0);    }
 }
 
 /* ===== Page intro meta row ===== */
 .page-intro {
-  position: relative; padding-bottom: 28px; margin-bottom: 4px;
+  position: relative; padding-bottom: 32px; margin-bottom: 8px;
 }
 .page-intro .intro-meta {
   position: absolute; right: 0; top: 8px;
-  display: flex; gap: 20px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px; color: var(--ink-mute);
-  letter-spacing: 0.08em; text-transform: uppercase;
+  display: flex; gap: 24px;
 }
-.page-intro .intro-meta b { color: var(--ink); font-weight: 600; }
 @media (max-width: 760px) {
-  .page-intro .intro-meta { position: static; margin-top: 14px; }
+  .page-intro .intro-meta { position: static; margin-top: 16px; }
 }
 
-/* ===== Footer quote — display serif ===== */
-.footer-quote .fq-text {
-  font-family: var(--display);
-  font-style: italic;
-  font-size: 1.15rem;
-  font-variation-settings: "SOFT" 60, "wght" 400;
+/* ===== Topbar — strip the orange gradient bar; use a hairline ===== */
+.topbar::after {
+  background: var(--border) !important;
+  height: 1px !important;
+  opacity: 1 !important;
 }
+
+/* ===== Footer quote — Inter 600 italic instead of serif ===== */
+.footer-quote {
+  border-left-color: var(--brand-orange);
+  background: var(--surface);
+  box-shadow: none;
+}
+.footer-quote .fq-text {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.05rem;
+}
+.footer-quote::before { color: var(--brand-orange); opacity: 0.18; }
+
+/* ===== Universal: kill leftover shadows on the various card patterns ===== */
+.lead-card,
+.action-card,
+.stat-strip .stat,
+.prr-card { box-shadow: none !important; }
+.lead-card { border: 1px solid var(--border); }
+
+/* ===== PRR cards — align to brand ===== */
+.prr-card {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: none !important;
+}
+.prr-card h3 {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.005em;
+}
+.prr-pill {
+  font-size: 11px; letter-spacing: 0.08em; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+}
+.prr-state-due_now           { border-left: 3px solid var(--brand-orange); }
+.prr-state-stale             { border-left: 3px solid #C44A14; }
+.prr-state-awaiting_response { border-left: 3px solid var(--ink); }
+.prr-state-scheduled         { border-left: 3px solid var(--ink-mute); }
+.prr-state-never_submitted   { border-left: 3px solid var(--border-hi); }
