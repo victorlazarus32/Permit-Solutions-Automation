@@ -130,12 +130,28 @@
       <h3 class="lead-card-title">Billing</h3>
       <div class="lead-kv">
         <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ inv.status }}">{{ 'ESTIMATE' if inv.status == 'draft' else inv.status|upper }}</span></span></div>
+        <div class="kv"><span class="k">Owner</span><span class="v mono">{{ inv.owner or '—' }}</span></div>
         <div class="kv"><span class="k">Issued</span><span class="v">{{ inv.issued_at[:10] if inv.issued_at else '—' }}</span></div>
         <div class="kv"><span class="k">Due</span><span class="v">{{ inv.due_at or '—' }}</span></div>
         {% if inv.paid_at %}<div class="kv"><span class="k">Paid</span><span class="v">{{ inv.paid_at[:10] }}</span></div>{% endif %}
         {% if inv.payment_method %}<div class="kv"><span class="k">Method</span><span class="v">{{ inv.payment_method }}</span></div>{% endif %}
         {% if inv.payment_reference %}<div class="kv"><span class="k">Reference</span><span class="v mono">{{ inv.payment_reference }}</span></div>{% endif %}
       </div>
+      {% if is_admin and all_users %}
+      <details style="margin-top: 10px;">
+        <summary style="cursor: pointer; font-size: 0.8rem; color: var(--ink-mute);">Reassign owner</summary>
+        <form method="POST" action="{{ url_for('invoice_reassign_owner', invoice_id=inv.id) }}"
+              style="display: flex; gap: 6px; margin-top: 8px;">
+          <select name="owner" style="flex: 1;">
+            <option value="" {% if not inv.owner %}selected{% endif %}>(unassigned)</option>
+            {% for u in all_users %}
+              <option value="{{ u }}" {% if u == inv.owner %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-secondary btn-tiny">Save</button>
+        </form>
+      </details>
+      {% endif %}
     </div>
 
     {# ===== Workflow (formerly the Jobs feature, now part of every invoice) ===== #}

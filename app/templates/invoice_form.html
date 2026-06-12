@@ -370,6 +370,21 @@
     </div>
   </div>
 
+  {% if is_admin and not is_edit and all_users %}
+  <h3 class="lead-card-title" style="margin-top: 1.5rem;">Assign to operator</h3>
+  <div class="form-row">
+    <div class="form-field" style="max-width: 280px;">
+      <label for="owner_select">Owner</label>
+      <select name="owner" id="owner_select">
+        {% for u in all_users %}
+          <option value="{{ u }}" {% if u == current_user %}selected{% endif %}>{{ u }}</option>
+        {% endfor %}
+      </select>
+      <small style="color: var(--ink-mute); font-size: 0.78rem;">Operators will only see invoices assigned to them.</small>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="form-actions" style="margin-top: 1.5rem; display: flex; gap: 0.75rem;">
     <button type="submit" class="btn-primary">{% if is_edit %}Save changes{% else %}Create draft{% endif %}</button>
     <a href="{% if is_edit %}{{ url_for('invoice_detail', invoice_id=invoice.id) }}{% else %}{{ url_for('invoices_list') }}{% endif %}" class="btn-secondary">Cancel</a>

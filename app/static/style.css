@@ -1433,16 +1433,16 @@ details[open] .intake-section-title::after { content: "−"; background: var(--i
   font-weight: 700;
   color: var(--brand-navy);
 }
-.tu-logout {
+.tu-logout, .tu-pw {
   font-size: 14px;
   color: var(--ink-mute);
   text-decoration: none;
   line-height: 1;
   padding: 0 4px;
-  transform: scaleX(-1);
   display: inline-block;
 }
-.tu-logout:hover { color: var(--brand-orange); }
+.tu-logout { transform: scaleX(-1); }
+.tu-logout:hover, .tu-pw:hover { color: var(--brand-orange); }
 
 /* ===== Upload form ===== */
 .upload-form input[type="file"] {

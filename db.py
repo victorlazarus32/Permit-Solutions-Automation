@@ -515,6 +515,7 @@ def _migrate_invoices(conn) -> None:
         ("workflow_status",   "TEXT NOT NULL DEFAULT 'intake'"),  # permit workflow stage (formerly the Job's status)
         ("workflow_opened_at","TEXT"),                    # when this engagement entered the workflow
         ("workflow_closed_at","TEXT"),                    # when the workflow reached a terminal state
+        ("owner",             "TEXT"),                    # username of the operator who owns this invoice (NULL = legacy/unassigned)
     ]
     for col, ddl in additions:
         if col not in existing:
@@ -526,6 +527,11 @@ def _migrate_invoices(conn) -> None:
         "UPDATE invoices SET workflow_opened_at = created_at "
         "WHERE workflow_opened_at IS NULL"
     )
+    # Backfill owner for invoices that pre-date the access-control feature.
+    # Assign to 'victor' (admin) so admins keep full visibility and the rows
+    # can be reassigned from the invoice detail page after rollout.
+    conn.execute("UPDATE invoices SET owner = 'victor' WHERE owner IS NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS ix_invoices_owner ON invoices(owner)")
 
 
 # Columns we accept on upsert (everything except lob_* which is set later)

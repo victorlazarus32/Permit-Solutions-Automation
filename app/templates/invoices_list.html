@@ -39,12 +39,27 @@
   </div>
 </div>
 
-<div class="filter-row" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+<div class="filter-row" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
   {% set filters = [('all', 'All'), ('draft','Draft'), ('sent','Sent'), ('partial','Partial'), ('overdue','Overdue'), ('paid','Paid'), ('void','Void')] %}
   {% for key, label in filters %}
     <a class="chip {% if active_status == key %}chip-active{% endif %}"
-       href="{{ url_for('invoices_list') }}{% if key != 'all' %}?status={{ key }}{% endif %}">{{ label }}</a>
+       href="{{ url_for('invoices_list') }}{% if key != 'all' %}?status={{ key }}{% endif %}{% if scope_owner and is_admin %}{% if key != 'all' %}&{% else %}?{% endif %}owner={{ scope_owner }}{% endif %}">{{ label }}</a>
   {% endfor %}
+
+  {% if is_admin and all_users %}
+  <span style="margin-left: auto; display: inline-flex; gap: 6px; align-items: center; font-size: 0.85rem;">
+    <label for="owner_filter" style="color: var(--ink-mute);">Owner:</label>
+    <select id="owner_filter" onchange="
+      const u = this.value;
+      const params = new URLSearchParams(window.location.search);
+      if (u) { params.set('owner', u); } else { params.delete('owner'); }
+      window.location.search = params.toString();
+    " style="font-size: 0.85rem; padding: 4px 8px;">
+      <option value="">All operators</option>
+      {% for u in all_users %}<option value="{{ u }}" {% if scope_owner == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
+    </select>
+  </span>
+  {% endif %}
 </div>
 
 {% if invoices %}
@@ -54,6 +69,7 @@
       <tr>
         <th>Invoice #</th>
         <th>Client</th>
+        {% if is_admin %}<th>Owner</th>{% endif %}
         <th>Issued</th>
         <th>Due</th>
         <th class="num">Total</th>
@@ -70,6 +86,7 @@
           {{ inv.client_name }}
           {% if inv.case_number %}<br><span class="mono" style="font-size: 0.8em; color: var(--ink-mute);">{{ inv.case_number }}</span>{% endif %}
         </td>
+        {% if is_admin %}<td class="mono" style="font-size: 0.85em; color: var(--ink-mute);">{{ inv.owner or '—' }}</td>{% endif %}
         <td>{{ inv.issued_at[:10] if inv.issued_at else '—' }}</td>
         <td>
           {{ inv.due_at or '—' }}

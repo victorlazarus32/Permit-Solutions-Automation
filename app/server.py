@@ -80,14 +80,121 @@ def _load_or_create_secret() -> str:
     return secret
 
 
+ROLES = ("admin", "operator")
+DEFAULT_ROLE = "operator"
+
+# City filter options for the queue + mail-today form. Ordered for the UI.
+# Source keys match the `violations.source` column written by each connector.
+_SOURCE_OPTIONS: list[tuple[str, str]] = [
+    ("homestead",                  "Homestead"),
+    ("miami_dade_unincorporated",  "Miami-Dade"),
+    ("city_of_miami",              "City of Miami"),
+    ("pinecrest",                  "Pinecrest"),
+    ("palmetto_bay",               "Palmetto Bay"),
+    ("cutler_bay",                 "Cutler Bay"),
+    ("miami_beach",                "Miami Beach"),
+]
+_SOURCE_OPTIONS_KEYS = {k for k, _ in _SOURCE_OPTIONS}
+_SOURCE_OPTIONS_LABEL = dict(_SOURCE_OPTIONS)
+# Bootstrap: known accounts that should be admins on first migration from
+# the legacy {username: hash} file format. Anyone else defaults to operator.
+_BOOTSTRAP_ADMINS = {"victor", "victor@alldayfence.com"}
+
+
+def _normalize_user_record(username: str, raw) -> dict:
+    """Coerce a users.json value (legacy string OR new dict) to the new shape:
+    {password_hash, role, full_name}."""
+    if isinstance(raw, str):
+        role = "admin" if username in _BOOTSTRAP_ADMINS else DEFAULT_ROLE
+        return {"password_hash": raw, "role": role, "full_name": ""}
+    if isinstance(raw, dict):
+        return {
+            "password_hash": raw.get("password_hash") or raw.get("password") or "",
+            "role": raw.get("role") if raw.get("role") in ROLES else DEFAULT_ROLE,
+            "full_name": raw.get("full_name") or "",
+        }
+    # Garbage value — treat as no record.
+    return {"password_hash": "", "role": DEFAULT_ROLE, "full_name": ""}
+
+
 def _load_users() -> dict:
-    """Username -> hashed password. Empty dict if file missing or invalid."""
+    """Username -> {password_hash, role, full_name}. Empty if file missing/invalid."""
     if not USERS_FILE.exists():
         return {}
     try:
-        return json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        raw = json.loads(USERS_FILE.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    needs_rewrite = False
+    for username, val in raw.items():
+        rec = _normalize_user_record(username, val)
+        out[username] = rec
+        # If the on-disk value was a bare string OR was missing a role,
+        # rewrite the file so future loads see the new shape.
+        if not isinstance(val, dict) or val.get("role") not in ROLES:
+            needs_rewrite = True
+    if needs_rewrite:
+        try:
+            _save_users(out)
+        except OSError:
+            pass  # read-only FS shouldn't break login
+    return out
+
+
+def _save_users(users: dict) -> None:
+    """Persist users.json in the new format."""
+    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    USERS_FILE.write_text(json.dumps(users, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _user_record(username: str) -> dict | None:
+    return _load_users().get((username or "").strip().lower())
+
+
+def current_user() -> str | None:
+    """Logged-in username (lowercase) or None."""
+    return session.get("user")
+
+
+def current_role() -> str:
+    """Current user's role, or DEFAULT_ROLE if not logged in / unknown."""
+    rec = _user_record(current_user() or "")
+    return (rec or {}).get("role", DEFAULT_ROLE)
+
+
+def is_admin() -> bool:
+    return current_role() == "admin"
+
+
+def visible_invoices_filter() -> tuple[str, list]:
+    """SQL fragment + params that restrict invoice queries to what the current
+    user is allowed to see. Admin gets everything; operators get their own.
+    Returns (sql_fragment_starting_with_AND, params_list)."""
+    if is_admin():
+        return ("", [])
+    user = current_user() or ""
+    # Include NULL-owner rows for the admin's own visibility logic? No —
+    # operators never see unassigned rows. Backfill assigns all legacy rows
+    # to an admin so they remain visible to admins only.
+    return (" AND owner = ?", [user])
+
+
+def require_admin(view):
+    """Decorator: 403 if not admin. Use on admin-only routes."""
+    from functools import wraps
+
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not is_admin():
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "admin only"}), 403
+            flash("Admin access required.", "error")
+            return redirect(url_for("dashboard"))
+        return view(*args, **kwargs)
+    return wrapper
 
 
 app = Flask(
@@ -142,9 +249,13 @@ def login():
                 # Auto-create the user on first login when bypass is on, so a
                 # fresh install can authenticate immediately.
                 from werkzeug.security import generate_password_hash
-                users[username] = generate_password_hash("bypass")
-                USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-                USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+                role = "admin" if username in _BOOTSTRAP_ADMINS else DEFAULT_ROLE
+                users[username] = {
+                    "password_hash": generate_password_hash("bypass"),
+                    "role": role,
+                    "full_name": "",
+                }
+                _save_users(users)
             session["user"] = username
             session.permanent = True
             target = request.args.get("next") or url_for("dashboard")
@@ -152,7 +263,8 @@ def login():
                         username, request.remote_addr)
             return redirect(target)
 
-        if username in users and check_password_hash(users[username], password):
+        rec = users.get(username)
+        if rec and check_password_hash(rec.get("password_hash", ""), password):
             session["user"] = username
             session.permanent = True
             target = request.args.get("next") or url_for("dashboard")
@@ -179,6 +291,8 @@ def _inject_globals() -> dict:
     return {
         "now": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
         "current_user": session.get("user"),
+        "current_role": current_role(),
+        "is_admin": is_admin(),
     }
 
 # Tracks the most recent long-running task so the UI can show progress.
@@ -208,6 +322,25 @@ log = logging.getLogger("operator_console")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _can_view_invoice(inv: dict) -> bool:
+    """True if the current user is allowed to see this invoice row."""
+    if is_admin():
+        return True
+    return (inv or {}).get("owner") == current_user()
+
+
+def _block_if_not_owner(inv: dict):
+    """If the current user can't see this invoice, return a Flask response that
+    sends them away with a 'not found' message (don't reveal existence).
+    Returns None when the user is allowed through."""
+    if _can_view_invoice(inv):
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "not found"}), 404
+    flash("Invoice not found.", "error")
+    return redirect(url_for("invoices_list"))
+
 
 def _read_last_scrape() -> str | None:
     if WATERMARK_FILE.exists():
@@ -276,30 +409,53 @@ def _by_source_counts() -> dict:
         return {}
 
 
-def _ready_rows(limit: int = 500) -> list[dict]:
+def _ready_rows(limit: int = 500, source: str | None = None) -> list[dict]:
+    sql = """
+        SELECT source, case_number, open_date, property_address,
+               owner_full_name, owner_mailing_address,
+               matched_keywords, alleged_violation,
+               lob_address_deliverability, lob_address_verified_at
+        FROM violations
+        WHERE owner_mailing_address IS NOT NULL
+          AND owner_full_name      IS NOT NULL
+          AND lob_letter_id        IS NULL
+          AND (do_not_mail IS NULL OR do_not_mail = 0)
+          AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
+    """
+    params: list = []
+    if source:
+        sql += " AND source = ?"
+        params.append(source)
+    sql += " ORDER BY open_date DESC, case_number DESC LIMIT ?"
+    params.append(limit)
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+
+
+def _ready_counts_by_source() -> dict:
+    """Map of source -> mailable row count, for the queue filter chips."""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
-                SELECT source, case_number, open_date, property_address,
-                       owner_full_name, owner_mailing_address,
-                       matched_keywords, alleged_violation,
-                       lob_address_deliverability, lob_address_verified_at
-                FROM violations
-                WHERE owner_mailing_address IS NOT NULL
-                  AND owner_full_name      IS NOT NULL
-                  AND lob_letter_id        IS NULL
-                  AND (do_not_mail IS NULL OR do_not_mail = 0)
-                  AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
-                ORDER BY open_date DESC, case_number DESC
-                LIMIT ?
-                """,
-                (limit,),
+                SELECT source, COUNT(*) AS n FROM violations
+                 WHERE owner_mailing_address IS NOT NULL
+                   AND owner_full_name      IS NOT NULL
+                   AND lob_letter_id        IS NULL
+                   AND (do_not_mail IS NULL OR do_not_mail = 0)
+                   AND (comments NOT LIKE '%NEEDS_OWNER_LOOKUP%' OR comments IS NULL)
+                 GROUP BY source
+                """
             ).fetchall()
-        return [dict(r) for r in rows]
+        return {r["source"]: r["n"] for r in rows}
     except sqlite3.OperationalError:
-        return []
+        return {}
 
 
 def _calculate_lead_score(d: dict) -> tuple[int, str]:
@@ -701,10 +857,12 @@ def dashboard():
 
     lob_ok, lob_reason = _lob_ready()
 
-    # Workflow pipeline (macro view): counts of invoices in each workflow status
-    pipeline_counts = inv_mod.workflow_status_counts()
+    # Workflow pipeline (macro view): counts of invoices in each workflow status.
+    # Operators only see their own work; admins see everything.
+    scope_owner = None if is_admin() else current_user()
+    pipeline_counts = inv_mod.workflow_status_counts(owner=scope_owner)
     # Stuck invoices — non-terminal invoices that have outstayed their threshold
-    stuck_jobs = inv_mod.list_stuck_invoices(limit=10)
+    stuck_jobs = inv_mod.list_stuck_invoices(limit=10, owner=scope_owner)
 
     return render_template(
         "dashboard.html",
@@ -726,6 +884,7 @@ def dashboard():
         pipeline_counts=pipeline_counts,
         pipeline_total=sum(pipeline_counts.values()),
         stuck_jobs=stuck_jobs,
+        send_source_options=_SOURCE_OPTIONS,
     )
 
 
@@ -739,7 +898,9 @@ def lead_detail(source: str, case_number: str):
     intakes = _intakes_for_case(source, case_number)
     try:
         from invoices import invoices_for_case
-        case_invoices = invoices_for_case(source, case_number)
+        # Operators only see their own invoices for this case.
+        scope = None if is_admin() else current_user()
+        case_invoices = invoices_for_case(source, case_number, owner=scope)
     except Exception:
         case_invoices = []
     return render_template(
@@ -1280,17 +1441,25 @@ def _render_invoice_pdf(inv: dict) -> bytes:
 def invoices_list():
     status = (request.args.get("status") or "").strip() or None
     workflow_status = (request.args.get("workflow_status") or "").strip() or None
-    if workflow_status:
-        invoices = inv_mod.list_by_workflow_status(workflow_status, limit=500)
+    # Scope to the current user unless admin. Admins can also filter to a
+    # specific owner via ?owner=<username>.
+    if is_admin():
+        scope_owner = (request.args.get("owner") or "").strip() or None
     else:
-        invoices = inv_mod.list_invoices(status=status, limit=500)
-    stats = inv_mod.summary_stats()
+        scope_owner = current_user()
+    if workflow_status:
+        invoices = inv_mod.list_by_workflow_status(workflow_status, owner=scope_owner, limit=500)
+    else:
+        invoices = inv_mod.list_invoices(status=status, owner=scope_owner, limit=500)
+    stats = inv_mod.summary_stats(owner=scope_owner)
     return render_template(
         "invoices_list.html",
         invoices=invoices,
         stats=stats,
         active_status=status or "all",
         active_workflow_status=workflow_status,
+        scope_owner=scope_owner,
+        all_users=sorted(_load_users().keys()) if is_admin() else [],
     )
 
 
@@ -1309,6 +1478,13 @@ def invoice_new():
         except ValueError:
             tax_rate = 0.0
 
+        # Admins can pick the owner from the form; operators always own what they create.
+        if is_admin():
+            chosen_owner = (f.get("owner") or "").strip().lower() or current_user()
+            if chosen_owner not in _load_users():
+                chosen_owner = current_user()
+        else:
+            chosen_owner = current_user()
         try:
             inv = inv_mod.create_invoice(
                 client_name=(f.get("client_name") or "").strip(),
@@ -1334,6 +1510,7 @@ def invoice_new():
                 due_at=_fs(f, "due_at"),
                 terms=_fs(f, "terms") or "Due on receipt",
                 notes=_fs(f, "notes"),
+                owner=chosen_owner,
             )
         except ValueError as e:
             flash(f"Could not create invoice: {e}", "error")
@@ -1386,6 +1563,7 @@ def invoice_new():
         default_invoice_contract=contracts_mod.get_default_invoice_contract(),
         scope_modules_available=scope_mod.list_modules(),
         client_summary_templates=cs_mod.TEMPLATES,
+        all_users=sorted(_load_users().keys()) if is_admin() else [],
     )
 
 
@@ -1396,6 +1574,9 @@ def invoice_detail(invoice_id: int):
     except LookupError:
         flash("Invoice not found.", "error")
         return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
     line_items = json.loads(inv["line_items"])
     attached_contract = contracts_mod.get_contract(inv["contract_id"]) if inv.get("contract_id") else None
     return render_template(
@@ -1408,6 +1589,7 @@ def invoice_detail(invoice_id: int):
         workflow_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
         workflow_history=inv_mod.list_workflow_history(invoice_id),
         invoice_tasks=inv_mod.list_invoice_tasks(invoice_id),
+        all_users=sorted(_load_users().keys()) if is_admin() else [],
     )
 
 
@@ -1418,6 +1600,9 @@ def invoice_edit(invoice_id: int):
     except LookupError:
         flash("Invoice not found.", "error")
         return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
     if inv["status"] != "draft":
         flash(f"Only draft invoices are editable (current: {inv['status']}).", "error")
         return redirect(url_for("invoice_detail", invoice_id=invoice_id))
@@ -1482,6 +1667,9 @@ def invoice_pdf(invoice_id: int):
     except LookupError:
         flash("Invoice not found.", "error")
         return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
     import io
     try:
         pdf_bytes = _render_invoice_pdf(inv)
@@ -1500,6 +1688,14 @@ def invoice_pdf(invoice_id: int):
 @app.post("/invoices/<int:invoice_id>/mark-sent")
 def invoice_mark_sent(invoice_id: int):
     try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
+    try:
         inv = inv_mod.mark_sent(invoice_id)
         flash(f"Invoice {inv['invoice_number']} marked sent.", "success")
     except (ValueError, LookupError) as e:
@@ -1509,6 +1705,14 @@ def invoice_mark_sent(invoice_id: int):
 
 @app.post("/invoices/<int:invoice_id>/record-payment")
 def invoice_record_payment(invoice_id: int):
+    try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
     f = request.form
     try:
         amount = float((f.get("amount") or "0").replace("$", "").replace(",", ""))
@@ -1531,12 +1735,37 @@ def invoice_record_payment(invoice_id: int):
 
 @app.post("/invoices/<int:invoice_id>/void")
 def invoice_void(invoice_id: int):
+    try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
     reason = _fs(request.form, "reason")
     try:
         inv = inv_mod.void_invoice(invoice_id, reason=reason)
         flash(f"Invoice {inv['invoice_number']} voided.", "success")
     except LookupError as e:
         flash(str(e), "error")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+
+@app.post("/invoices/<int:invoice_id>/reassign-owner")
+@require_admin
+def invoice_reassign_owner(invoice_id: int):
+    try:
+        inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    new_owner = (request.form.get("owner") or "").strip().lower()
+    if new_owner and new_owner not in _load_users():
+        flash(f"No such user: {new_owner}", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    inv_mod.set_owner(invoice_id, new_owner or None)
+    flash(f"Owner reassigned to {new_owner or '(unassigned)'}.", "success")
     return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
 
@@ -1591,8 +1820,34 @@ def contract_edit(contract_id: int):
 
 # ===== Workflow + tasks (live on invoices now; Jobs merged in) =====
 
+def _task_invoice_or_block(task_id: int):
+    """Load a task's parent invoice and check visibility. Returns (task, invoice)
+    on success, or (None, response) when the user is blocked / task missing."""
+    t = inv_mod._get_invoice_task(task_id)
+    if not t:
+        flash("Task not found.", "error")
+        return None, redirect(url_for("invoices_list"))
+    try:
+        inv = inv_mod.get_invoice(t["invoice_id"])
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return None, redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return None, blocked
+    return (t, inv), None
+
+
 @app.post("/invoices/<int:invoice_id>/workflow")
 def invoice_workflow_transition(invoice_id: int):
+    try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
     f = request.form
     to_status = (f.get("to_status") or "").strip()
     note      = _fs(f, "note")
@@ -1616,6 +1871,14 @@ def invoice_workflow_transition(invoice_id: int):
 
 @app.post("/invoices/<int:invoice_id>/tasks")
 def invoice_task_add(invoice_id: int):
+    try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
     f = request.form
     try:
         inv_mod.add_invoice_task(
@@ -1631,31 +1894,40 @@ def invoice_task_add(invoice_id: int):
 
 @app.post("/invoices/tasks/<int:task_id>/complete")
 def invoice_task_complete(task_id: int):
+    pair, blocked = _task_invoice_or_block(task_id)
+    if blocked:
+        return blocked
+    _, inv = pair
     try:
-        t = inv_mod.complete_invoice_task(task_id, by=session.get("user"))
+        inv_mod.complete_invoice_task(task_id, by=session.get("user"))
     except LookupError as e:
         flash(str(e), "error")
         return redirect(url_for("invoices_list"))
-    return redirect(url_for("invoice_detail", invoice_id=t["invoice_id"]))
+    return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
 
 
 @app.post("/invoices/tasks/<int:task_id>/reopen")
 def invoice_task_reopen(task_id: int):
+    pair, blocked = _task_invoice_or_block(task_id)
+    if blocked:
+        return blocked
+    _, inv = pair
     try:
-        t = inv_mod.reopen_invoice_task(task_id)
+        inv_mod.reopen_invoice_task(task_id)
     except LookupError as e:
         flash(str(e), "error")
         return redirect(url_for("invoices_list"))
-    return redirect(url_for("invoice_detail", invoice_id=t["invoice_id"]))
+    return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
 
 
 @app.post("/invoices/tasks/<int:task_id>/delete")
 def invoice_task_delete(task_id: int):
-    t = inv_mod._get_invoice_task(task_id)
+    pair, blocked = _task_invoice_or_block(task_id)
+    if blocked:
+        return blocked
+    _, inv = pair
     inv_mod.delete_invoice_task(task_id)
-    if t:
-        return redirect(url_for("invoice_detail", invoice_id=t["invoice_id"]))
-    return redirect(url_for("invoices_list"))
+    return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
 
 
 # ===== DEPRECATED Jobs routes — redirect to the equivalent invoices view =====
@@ -1781,6 +2053,7 @@ def api_scope_assemble():
 
 
 @app.route("/reports")
+@require_admin
 def reports():
     # Quick-range presets via ?range=today|7|30|90|all
     today_iso = dt.date.today().isoformat()
@@ -1823,8 +2096,22 @@ def reports():
 
 @app.route("/queue")
 def queue():
-    rows = _ready_rows(limit=1000)
-    return render_template("queue.html", rows=rows, count=len(rows))
+    source_filter = (request.args.get("source") or "").strip() or None
+    if source_filter == "all":
+        source_filter = None
+    if source_filter and source_filter not in _SOURCE_OPTIONS_KEYS:
+        source_filter = None  # silently fall back to All on bad input
+    rows = _ready_rows(limit=1000, source=source_filter)
+    counts = _ready_counts_by_source()
+    return render_template(
+        "queue.html",
+        rows=rows,
+        count=len(rows),
+        source_filter=source_filter,
+        source_options=_SOURCE_OPTIONS,
+        source_counts=counts,
+        total_count=sum(counts.values()),
+    )
 
 
 @app.route("/sent")
@@ -1836,6 +2123,159 @@ def sent():
 @app.route("/settings")
 def settings():
     return render_template("settings.html", env=_env_status())
+
+
+# ---------------------------------------------------------------------------
+# Admin: user management
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/users")
+@require_admin
+def admin_users():
+    users = _load_users()
+    # Counts of invoices owned by each user so admin can see workload at a glance.
+    with db_connect() as conn:
+        rows = conn.execute(
+            "SELECT owner, COUNT(*) AS n FROM invoices "
+            "WHERE status <> 'void' GROUP BY owner"
+        ).fetchall()
+    counts = {(r[0] or ""): r[1] for r in rows}
+    return render_template(
+        "admin_users.html",
+        users=users,
+        counts=counts,
+        roles=ROLES,
+    )
+
+
+@app.post("/admin/users/add")
+@require_admin
+def admin_users_add():
+    from werkzeug.security import generate_password_hash
+    f = request.form
+    username = (f.get("username") or "").strip().lower()
+    password = f.get("password") or ""
+    role = (f.get("role") or DEFAULT_ROLE).strip().lower()
+    full_name = (f.get("full_name") or "").strip()
+    if not username:
+        flash("Username is required.", "error")
+        return redirect(url_for("admin_users"))
+    if role not in ROLES:
+        flash(f"Role must be one of: {', '.join(ROLES)}", "error")
+        return redirect(url_for("admin_users"))
+    if not password:
+        flash("Initial password is required.", "error")
+        return redirect(url_for("admin_users"))
+    users = _load_users()
+    if username in users:
+        flash(f"User '{username}' already exists. Use Reset Password to change credentials.", "error")
+        return redirect(url_for("admin_users"))
+    users[username] = {
+        "password_hash": generate_password_hash(password),
+        "role": role,
+        "full_name": full_name,
+    }
+    _save_users(users)
+    flash(f"Created user '{username}' ({role}).", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/users/<username>/role")
+@require_admin
+def admin_users_set_role(username: str):
+    username = (username or "").strip().lower()
+    role = (request.form.get("role") or "").strip().lower()
+    if role not in ROLES:
+        flash(f"Role must be one of: {', '.join(ROLES)}", "error")
+        return redirect(url_for("admin_users"))
+    users = _load_users()
+    if username not in users:
+        flash(f"No such user: {username}", "error")
+        return redirect(url_for("admin_users"))
+    # Guard rail: prevent the current admin from demoting themselves and
+    # locking everyone out. They can still demote OTHER admins.
+    if username == current_user() and role != "admin":
+        flash("You can't change your own role away from admin. Have another admin do it.", "error")
+        return redirect(url_for("admin_users"))
+    users[username]["role"] = role
+    _save_users(users)
+    flash(f"Role for '{username}' set to {role}.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/users/<username>/password")
+@require_admin
+def admin_users_reset_password(username: str):
+    from werkzeug.security import generate_password_hash
+    username = (username or "").strip().lower()
+    new_password = request.form.get("password") or ""
+    if not new_password:
+        flash("New password is required.", "error")
+        return redirect(url_for("admin_users"))
+    users = _load_users()
+    if username not in users:
+        flash(f"No such user: {username}", "error")
+        return redirect(url_for("admin_users"))
+    users[username]["password_hash"] = generate_password_hash(new_password)
+    _save_users(users)
+    flash(f"Password reset for '{username}'.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/me/password", methods=["GET", "POST"])
+def my_password():
+    """Self-service: any logged-in user can rotate their own password."""
+    from werkzeug.security import generate_password_hash
+    username = current_user()
+    if request.method == "POST":
+        users = _load_users()
+        rec = users.get(username)
+        if not rec:
+            flash("Your account record is missing.", "error")
+            return redirect(url_for("dashboard"))
+        current_pw = request.form.get("current_password") or ""
+        new_pw     = request.form.get("new_password") or ""
+        confirm_pw = request.form.get("confirm_password") or ""
+        if not check_password_hash(rec.get("password_hash", ""), current_pw):
+            flash("Current password is incorrect.", "error")
+            return redirect(url_for("my_password"))
+        if len(new_pw) < 8:
+            flash("New password must be at least 8 characters.", "error")
+            return redirect(url_for("my_password"))
+        if new_pw != confirm_pw:
+            flash("New password and confirmation do not match.", "error")
+            return redirect(url_for("my_password"))
+        rec["password_hash"] = generate_password_hash(new_pw)
+        users[username] = rec
+        _save_users(users)
+        log.info("user %s rotated their own password", username)
+        flash("Password updated.", "success")
+        return redirect(url_for("dashboard"))
+    return render_template("my_password.html")
+
+
+@app.post("/admin/users/<username>/delete")
+@require_admin
+def admin_users_delete(username: str):
+    username = (username or "").strip().lower()
+    if username == current_user():
+        flash("You can't delete yourself.", "error")
+        return redirect(url_for("admin_users"))
+    users = _load_users()
+    if username not in users:
+        flash(f"No such user: {username}", "error")
+        return redirect(url_for("admin_users"))
+    # If this user owned invoices, reassign them to the current admin so
+    # the rows don't become orphaned (operators-only filter wouldn't see them).
+    with db_connect() as conn:
+        conn.execute(
+            "UPDATE invoices SET owner = ? WHERE owner = ?",
+            (current_user(), username),
+        )
+    del users[username]
+    _save_users(users)
+    flash(f"Deleted user '{username}'. Their invoices were reassigned to you.", "success")
+    return redirect(url_for("admin_users"))
 
 
 # ---------------------------------------------------------------------------
@@ -2282,6 +2722,13 @@ def action_send():
     # Defaults to today so the button can never accidentally flush the backlog.
     since_open_date = _parse_since_date(request.form.get("since_date")) \
                       or dt.date.today().isoformat()
+    # Optional city filter — empty string / "all" means mail every city.
+    source_filter = (request.form.get("source") or "").strip() or None
+    if source_filter == "all":
+        source_filter = None
+    if source_filter and source_filter not in _SOURCE_OPTIONS_KEYS:
+        flash(f"Unknown city filter: {source_filter}", "error")
+        return redirect(url_for("dashboard"))
 
     def _send_with_progress():
         from lob_sender.send import send_batch
@@ -2293,6 +2740,7 @@ def action_send():
                 limit=None,
                 dry_run=False,
                 since_open_date=since_open_date,
+                source=source_filter,
                 on_progress=on_progress,
             )
             return {
@@ -2300,6 +2748,7 @@ def action_send():
                 "skipped": summary.get("skipped", 0),
                 "failed":  summary.get("failed", 0),
                 "since":   since_open_date,
+                "source":  source_filter or "all cities",
                 "error":   None,
             }
         except RuntimeError as e:
@@ -2310,7 +2759,8 @@ def action_send():
     if not _start_task("send", _send_with_progress):
         flash("Another task is already running. Wait for it to finish.", "warning")
     else:
-        flash(f"Sending letters opened on or after {since_open_date}. "
+        scope = _SOURCE_OPTIONS_LABEL.get(source_filter, "all cities") if source_filter else "all cities"
+        flash(f"Sending {scope} letters opened on or after {since_open_date}. "
               "The beacon up top tracks progress live.", "info")
     return redirect(url_for("dashboard"))
 
@@ -2420,11 +2870,14 @@ def action_verify_queue():
 
 @app.get("/api/ready-count")
 def api_ready_count():
-    """How many letters would mail if we filtered by ?since=YYYY-MM-DD right now."""
+    """How many letters would mail if we filtered by ?since=YYYY-MM-DD and ?source=<city>."""
     since = _parse_since_date(request.args.get("since"))
+    source = (request.args.get("source") or "").strip() or None
+    if source == "all" or (source and source not in _SOURCE_OPTIONS_KEYS):
+        source = None
     from lob_sender.send import fetch_ready_rows
-    rows = fetch_ready_rows(since_open_date=since) if since else fetch_ready_rows()
-    return jsonify({"count": len(rows), "since": since})
+    rows = fetch_ready_rows(since_open_date=since, source=source)
+    return jsonify({"count": len(rows), "since": since, "source": source or "all"})
 
 
 @app.post("/actions/test-send")

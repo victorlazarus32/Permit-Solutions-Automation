@@ -267,6 +267,7 @@ def create_invoice(
     due_at: str | None = None,
     terms: str | None = "Due on receipt",
     notes: str | None = None,
+    owner: str | None = None,
 ) -> dict:
     """Create a draft invoice. Returns the saved row as a dict."""
     if not client_name or not client_name.strip():
@@ -288,7 +289,7 @@ def create_invoice(
                 property_address, property_city, property_state, property_zip,
                 line_items, subtotal, tax_rate, tax_amount, total, amount_paid,
                 status, due_at, terms, notes, deposit_amount, scope_of_services,
-                client_summary,
+                client_summary, owner,
                 created_at, updated_at
             ) VALUES (
                 :invoice_number, :source, :case_number, :contract_event_id, :contract_id,
@@ -297,7 +298,7 @@ def create_invoice(
                 :property_address, :property_city, :property_state, :property_zip,
                 :line_items, :subtotal, :tax_rate, :tax_amount, :total, 0,
                 'draft', :due_at, :terms, :notes, :deposit_amount, :scope_of_services,
-                :client_summary,
+                :client_summary, :owner,
                 :created_at, :updated_at
             )
             """,
@@ -329,6 +330,7 @@ def create_invoice(
                 "deposit_amount":    max(0.0, float(deposit_amount or 0.0)),
                 "scope_of_services": scope_of_services,
                 "client_summary":    client_summary,
+                "owner":             (owner or None),
                 "created_at":        now,
                 "updated_at":        now,
             },
@@ -500,14 +502,29 @@ def get_invoice_by_number(number: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
+def set_owner(invoice_id: int, owner: str | None) -> dict:
+    """Reassign an invoice's owner. Pass None to unassign."""
+    inv = get_invoice(invoice_id)
+    with connect() as conn:
+        conn.execute(
+            "UPDATE invoices SET owner = ?, updated_at = ? WHERE id = ?",
+            (owner or None, _now(), invoice_id),
+        )
+    return get_invoice(invoice_id)
+
+
 def list_invoices(
     *,
     status: str | None = None,
     source: str | None = None,
     case_number: str | None = None,
+    owner: str | None = None,
     limit: int = 500,
 ) -> list[dict]:
-    """Filterable list. status='overdue' returns derived-overdue rows (sent/partial with past due_at)."""
+    """Filterable list. status='overdue' returns derived-overdue rows (sent/partial with past due_at).
+
+    `owner`: if set, restrict to invoices owned by this username. If None, no
+    owner filter (callers gating by role should pass the username explicitly)."""
     sql = "SELECT * FROM invoices WHERE 1=1"
     params: list[Any] = []
     if status == "overdue":
@@ -522,6 +539,9 @@ def list_invoices(
     if case_number:
         sql += " AND case_number = ?"
         params.append(case_number)
+    if owner is not None:
+        sql += " AND owner = ?"
+        params.append(owner)
     sql += " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
     with connect() as conn:
@@ -529,16 +549,20 @@ def list_invoices(
     return [_row_to_dict(r) for r in rows]
 
 
-def invoices_for_case(source: str, case_number: str) -> list[dict]:
-    return list_invoices(source=source, case_number=case_number, limit=100)
+def invoices_for_case(source: str, case_number: str, owner: str | None = None) -> list[dict]:
+    return list_invoices(source=source, case_number=case_number, owner=owner, limit=100)
 
 
-def summary_stats() -> dict:
-    """For the dashboard tile: counts + outstanding dollars."""
+def summary_stats(owner: str | None = None) -> dict:
+    """For the dashboard tile: counts + outstanding dollars. Optionally scope to one owner."""
     today = date.today().isoformat()
+    owner_clause = " AND owner = ?" if owner is not None else ""
+    params: list = [today, today, today]
+    if owner is not None:
+        params.append(owner)
     with connect() as conn:
         row = conn.execute(
-            """
+            f"""
             SELECT
               COALESCE(SUM(CASE WHEN status IN ('sent','partial')
                                  AND (due_at IS NULL OR due_at >= ?)
@@ -555,8 +579,9 @@ def summary_stats() -> dict:
                        THEN 1 ELSE 0 END) AS overdue_count,
               COUNT(*) AS total_count
             FROM invoices
+            WHERE 1=1{owner_clause}
             """,
-            (today, today, today),
+            params,
         ).fetchone()
     return {
         "outstanding":   float(row["outstanding"]   or 0),
@@ -645,23 +670,29 @@ def prefill_from_case(source: str, case_number: str) -> dict:
 # Workflow + tasks (formerly the Jobs feature, now merged in)
 # ============================================================
 
-def workflow_status_counts() -> dict:
-    """{status_key: count} of invoices in each workflow status."""
+def workflow_status_counts(owner: str | None = None) -> dict:
+    """{status_key: count} of invoices in each workflow status. Optionally scope to one owner."""
+    sql = "SELECT workflow_status, COUNT(*) AS n FROM invoices WHERE status <> 'void'"
+    params: list = []
+    if owner is not None:
+        sql += " AND owner = ?"
+        params.append(owner)
+    sql += " GROUP BY workflow_status"
     with connect() as conn:
-        rows = conn.execute(
-            "SELECT workflow_status, COUNT(*) AS n FROM invoices "
-            "WHERE status <> 'void' GROUP BY workflow_status"
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return {r[0]: r[1] for r in rows}
 
 
-def list_by_workflow_status(workflow_status: str | None = None, limit: int = 500) -> list[dict]:
-    """Invoices filtered by workflow status (omit to get all non-void)."""
+def list_by_workflow_status(workflow_status: str | None = None, owner: str | None = None, limit: int = 500) -> list[dict]:
+    """Invoices filtered by workflow status (omit to get all non-void). Optionally scope to one owner."""
     sql = "SELECT * FROM invoices WHERE status <> 'void'"
     params: list = []
     if workflow_status:
         sql += " AND workflow_status = ?"
         params.append(workflow_status)
+    if owner is not None:
+        sql += " AND owner = ?"
+        params.append(owner)
     sql += " ORDER BY workflow_status ASC, updated_at DESC LIMIT ?"
     params.append(int(limit))
     with connect() as conn:
@@ -825,21 +856,25 @@ def _seed_workflow_auto_tasks(invoice_id: int, status_key: str) -> int:
     return created
 
 
-def list_stuck_invoices(limit: int = 50) -> list[dict]:
+def list_stuck_invoices(limit: int = 50, owner: str | None = None) -> list[dict]:
     """
     Non-terminal invoices that have been in their current workflow status
     longer than WORKFLOW_STUCK_THRESHOLDS_DAYS allows. Sorted most-stuck first.
+    Optionally scope to one owner.
     """
+    owner_clause = " AND i.owner = ?" if owner is not None else ""
+    params: list = [owner] if owner is not None else []
     with connect() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT i.*,
                    (SELECT MAX(h.transitioned_at) FROM invoice_workflow_history h
                      WHERE h.invoice_id = i.id AND h.to_status = i.workflow_status) AS entered_status_at
               FROM invoices i
              WHERE i.workflow_status NOT IN ('closed_won', 'closed_lost')
-               AND i.status <> 'void'
-            """
+               AND i.status <> 'void'{owner_clause}
+            """,
+            params,
         ).fetchall()
 
     today = datetime.now(timezone.utc)

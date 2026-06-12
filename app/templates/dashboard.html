@@ -43,11 +43,23 @@
 <section class="task-banner task-success">
   <strong>Last task finished.</strong>
   {% if task.kind == 'scrape' %}
-    Pulled {{ task.result.inserted }} new cases ({{ task.result.updated }} updated).
+    Pulled {{ task.result.inserted }} new Miami-Dade cases ({{ task.result.updated }} already on file).
+  {% elif task.kind == 'homestead_tyler' %}
+    Pulled {{ task.result.inserted }} new Homestead cases in scope
+    ({{ task.result.fetched }} total fetched from Tyler;
+    {{ task.result.fetched - task.result.in_scope }} dropped by keyword filter).
+    {% if task.result.error %}<br><strong>Note:</strong> {{ task.result.error }}{% endif %}
+  {% elif task.kind == 'pinecrest' %}
+    Pulled {{ task.result.inserted }} new Pinecrest cases in scope
+    ({{ task.result.fetched }} fetched, {{ task.result.in_scope }} matched keywords).
+    {% if task.result.error %}<br><strong>Note:</strong> {{ task.result.error }}{% endif %}
   {% elif task.kind == 'homestead' %}
-    Processed {{ task.result.files }} file(s); {{ task.result.inserted }} new cases.
+    Processed {{ task.result.files }} PRR file(s); {{ task.result.inserted }} new cases.
   {% elif task.kind == 'send' %}
-    Mailed {{ task.result.sent }} letters ({{ task.result.skipped }} skipped, {{ task.result.failed }} failed).
+    Mailed {{ task.result.sent }} {{ task.result.source or 'all-cities' }} letters
+    ({{ task.result.skipped }} skipped, {{ task.result.failed }} failed).
+  {% else %}
+    {{ task.kind|replace('_', ' ')|capitalize }} completed.
   {% endif %}
 </section>
 {% endif %}
@@ -430,6 +442,14 @@
            value="{{ today_iso }}" max="{{ today_iso }}"
            {% if not lob_ok %}disabled{% endif %}>
 
+    <label class="send-date-label" for="send-source" style="margin-top: 6px;">City</label>
+    <select name="source" id="send-source" {% if not lob_ok %}disabled{% endif %}>
+      <option value="all">All cities</option>
+      {% for key, label in send_source_options %}
+        <option value="{{ key }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+
     <input type="text" name="confirm" placeholder="Type YES to authorize" autocomplete="off" {% if lob_ok %}required{% else %}disabled{% endif %}>
     <button type="submit" {% if task.running or not lob_ok %}disabled{% endif %} class="btn-danger" id="send-btn">
       <span class="send-btn-default">{% if not lob_ok %}Locked: configure Lob first{% else %}Mail <span id="send-count">{{ totals.ready }}</span> Letter<span id="send-count-plural">s</span>{% endif %}</span>
@@ -453,15 +473,17 @@
   var btn  = document.getElementById('send-btn');
   if (!form || !btn) return;
 
-  /* Live recount when the user changes the date */
+  /* Live recount when the user changes the date OR the city */
   var dateInput   = document.getElementById('since_date');
+  var srcInput    = document.getElementById('send-source');
   var countSpan   = document.getElementById('send-count');
   var pluralSpan  = document.getElementById('send-count-plural');
   if (dateInput && countSpan) {
     var fetchCount = function() {
       var d = dateInput.value;
       if (!d) return;
-      fetch('/api/ready-count?since=' + encodeURIComponent(d))
+      var s = (srcInput && srcInput.value) ? srcInput.value : 'all';
+      fetch('/api/ready-count?since=' + encodeURIComponent(d) + '&source=' + encodeURIComponent(s))
         .then(function(r) { return r.json(); })
         .then(function(j) {
           countSpan.textContent = j.count;
@@ -470,6 +492,7 @@
         .catch(function() { /* leave count as-is on error */ });
     };
     dateInput.addEventListener('change', fetchCount);
+    if (srcInput) srcInput.addEventListener('change', fetchCount);
     fetchCount();
   }
 

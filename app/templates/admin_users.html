@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Users · Admin{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('dashboard') }}">Dashboard</a> · Admin · Users</p>
+      <h1>Users &amp; Access</h1>
+      <p class="hero-sub">Operators see only their own invoices. Admins see everything and can reassign ownership.</p>
+    </div>
+  </div>
+</section>
+
+<div class="lead-card">
+  <h3 class="lead-card-title">Current users</h3>
+  {% if users %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Full name</th>
+        <th>Role</th>
+        <th class="num">Active invoices</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for username, rec in users.items()|sort %}
+      <tr>
+        <td class="mono">{{ username }}{% if username == current_user %} <span class="status status-paid" style="font-size: 0.7rem;">YOU</span>{% endif %}</td>
+        <td>{{ rec.full_name or '—' }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('admin_users_set_role', username=username) }}" style="display: inline-flex; gap: 6px; align-items: center;">
+            <select name="role" style="font-size: 0.85rem;">
+              {% for r in roles %}<option value="{{ r }}" {% if rec.role == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn-secondary btn-tiny">Save</button>
+          </form>
+        </td>
+        <td class="num">{{ counts.get(username, 0) }}</td>
+        <td>
+          <details>
+            <summary style="cursor: pointer; font-size: 0.85rem; color: var(--ink-mute);">Reset password</summary>
+            <form method="POST" action="{{ url_for('admin_users_reset_password', username=username) }}"
+                  style="display: flex; gap: 6px; margin-top: 6px;">
+              <input type="text" name="password" required placeholder="new password"
+                     style="font-size: 0.85rem; padding: 4px 8px;">
+              <button type="submit" class="btn-secondary btn-tiny">Reset</button>
+            </form>
+          </details>
+          {% if username != current_user %}
+          <form method="POST" action="{{ url_for('admin_users_delete', username=username) }}"
+                onsubmit="return confirm('Delete {{ username }}? Their invoices will be reassigned to you.');"
+                style="margin-top: 4px;">
+            <button type="submit" class="btn-link" style="color: var(--red); font-size: 0.8rem;">Delete user</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-inline">No users yet.</p>
+  {% endif %}
+</div>
+
+<div class="lead-card" style="margin-top: 1rem;">
+  <h3 class="lead-card-title">Add user</h3>
+  <form method="POST" action="{{ url_for('admin_users_add') }}">
+    <div class="form-row">
+      <div class="form-field">
+        <label for="new-username">Username</label>
+        <input type="text" name="username" id="new-username" required autocomplete="off" placeholder="e.g. mario">
+      </div>
+      <div class="form-field">
+        <label for="new-full-name">Full name</label>
+        <input type="text" name="full_name" id="new-full-name" placeholder="optional">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="new-role">Role</label>
+        <select name="role" id="new-role">
+          {% for r in roles %}<option value="{{ r }}" {% if r == 'operator' %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="new-password">Initial password</label>
+        <input type="text" name="password" id="new-password" required placeholder="they can change it later">
+      </div>
+    </div>
+    <button type="submit" class="btn-primary">Create user</button>
+  </form>
+</div>
+
+<style>
+  .btn-tiny { padding: 4px 10px; font-size: 0.8rem; }
+  table.data-table { width: 100%; border-collapse: collapse; }
+  table.data-table th { text-align: left; padding: 8px 10px; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-mute); border-bottom: 1px solid var(--border); }
+  table.data-table th.num, table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.data-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+</style>
+
+{% endblock %}
