@@ -214,6 +214,46 @@ def run_homestead_tyler() -> dict:
                 "error": f"Homestead Tyler pull failed: {e}. Tell Victor."}
 
 
+def run_homestead_tyler_since(since_case_number: str, near_page: int = 1) -> dict:
+    """
+    Recovery action: rewrite the Tyler watermark to a specific case number
+    and pull everything strictly newer. Use when the incremental pull is
+    stuck (page hint past the catalog tail, returning 0 fetched) or to
+    backfill from a known boundary.
+
+    Args:
+      since_case_number: e.g. "CC-26-01806-NOV". Cases strictly greater than
+                         this in lex order are collected.
+      near_page:         Page where the given case roughly sits in the
+                         Tyler catalog. Pass 1 to walk from the start
+                         (~3 min); pass the actual rough page to skip the
+                         ascending walk and finish in ~30 sec.
+    """
+    from connectors.tyler_energov import (
+        run as tyler_run,
+        _save_watermark,
+        _save_watermark_page,
+    )
+
+    try:
+        _save_watermark("homestead", since_case_number)
+        _save_watermark_page("homestead", max(1, int(near_page)))
+        logging.info("homestead tyler: watermark rewritten to %s (page hint %d)",
+                     since_case_number, near_page)
+        # Higher max_pages here because a stale page hint could put us far
+        # below the actual catalog tail; we want to walk the rest in one go.
+        s = tyler_run("homestead", max_pages=600)
+        return {"fetched":  s.get("fetched", 0),
+                "in_scope": s.get("in_scope", 0),
+                "inserted": s.get("inserted", 0),
+                "updated":  s.get("updated", 0),
+                "error":    None}
+    except Exception as e:
+        logging.exception("homestead tyler backfill failed")
+        return {"fetched": 0, "in_scope": 0, "inserted": 0, "updated": 0,
+                "error": f"Homestead backfill failed: {e}. Tell Victor."}
+
+
 def run_pinecrest_etrakit() -> dict:
     """
     Pull new code cases from Pinecrest's eTRAKiT portal. Idempotent — the

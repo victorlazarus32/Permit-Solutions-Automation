@@ -56,7 +56,8 @@ from db import DB_PATH, init_db, connect as db_connect
 # and any UI that queries them blows up with "no such table".
 init_db()
 from scripts.morning_run import (run_miami_dade, run_homestead,
-                                  run_homestead_tyler, run_pinecrest_etrakit,
+                                  run_homestead_tyler, run_homestead_tyler_since,
+                                  run_pinecrest_etrakit,
                                   fetch_totals, run_send)
 
 LOG_FILE = PROJECT_ROOT / "data" / "morning_run.log"
@@ -2307,6 +2308,31 @@ def action_homestead_tyler():
     else:
         flash("Pulling new Homestead permit/zoning violations from the Tyler portal. "
               "This takes about a minute.", "info")
+    return redirect(url_for("dashboard"))
+
+
+# Recovery action: re-anchors the Tyler watermark just before the first
+# case opened on 2026-06-03 (CC-26-01806-NOV is the last case before it,
+# verified against the live Tyler catalog on 2026-06-12). Use when the
+# incremental "Pull Homestead" returns 0 because the saved page hint is
+# pointing past the catalog tail. Admin-only because it overwrites state.
+_HOMESTEAD_JUNE3_WATERMARK = "CC-26-01806-NOV"
+_HOMESTEAD_JUNE3_PAGE_HINT = 290  # CC-26-01807-NOV sits around page 301
+
+
+@app.post("/actions/pull-homestead-tyler-backfill-june3")
+@require_admin
+def action_homestead_tyler_backfill_june3():
+    def _wrap():
+        return run_homestead_tyler_since(
+            _HOMESTEAD_JUNE3_WATERMARK,
+            near_page=_HOMESTEAD_JUNE3_PAGE_HINT,
+        )
+    if not _start_task("homestead_tyler", _wrap):
+        flash("Another task is already running. Wait for it to finish.", "warning")
+    else:
+        flash("Rewriting Tyler watermark to just before June 3, 2026 and "
+              "pulling everything newer. About 30 seconds.", "info")
     return redirect(url_for("dashboard"))
 
 

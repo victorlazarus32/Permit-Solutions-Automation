@@ -411,6 +411,21 @@
     <h3>2. Pull New Homestead Cases</h3>
     <p>Pulls new permit and zoning violations from the City of Homestead's portal. Only Notices of Violation that match your trade scope are saved. Skips abatement, animal, sanitation, ticket, and unsafe structure cases.</p>
     <button type="submit" {% if task.running %}disabled{% endif %}>Pull Homestead</button>
+    {% if is_admin %}
+    <details style="margin-top: 10px;">
+      <summary style="cursor: pointer; font-size: 0.78rem; color: var(--ink-mute);">Recovery options</summary>
+      <p style="font-size: 0.78rem; color: var(--ink-mute); margin: 6px 0;">
+        Use if the regular pull returns 0 because the watermark is stuck past the catalog tail.
+        Re-anchors the watermark just before June 3, 2026 and re-pulls everything opened since then.
+      </p>
+      <form method="POST" action="{{ url_for('action_homestead_tyler_backfill_june3') }}"
+            onsubmit="return confirm('Reset Tyler watermark to June 3, 2026 and re-pull all cases newer than that?');">
+        <button type="submit" class="btn-secondary btn-tiny" {% if task.running %}disabled{% endif %}>
+          ⟲ Backfill since June 3
+        </button>
+      </form>
+    </details>
+    {% endif %}
   </form>
 
   <form method="POST" action="{{ url_for('action_pinecrest') }}" class="action-card">
