@@ -2320,6 +2320,61 @@ _HOMESTEAD_JUNE3_WATERMARK = "CC-26-01806-NOV"
 _HOMESTEAD_JUNE3_PAGE_HINT = 290  # CC-26-01807-NOV sits around page 301
 
 
+@app.get("/admin/tyler-probe")
+@require_admin
+def admin_tyler_probe():
+    """One-shot Tyler API probe so we can see exactly what production gets
+    back from Tyler without digging into Render logs. Admin-only."""
+    import requests as _rq
+    from connectors.tyler_energov import (
+        TYLER_TENANTS, _endpoint, _headers, _build_body,
+        _read_watermark, _read_watermark_page,
+    )
+    source = (request.args.get("source") or "homestead").strip().lower()
+    page = int(request.args.get("page") or 290)
+    if source not in TYLER_TENANTS:
+        return jsonify({"error": f"unknown source: {source}"}), 400
+    t = TYLER_TENANTS[source]
+    url = _endpoint(t)
+    headers = _headers(t)
+    body = _build_body(t, page_number=page)
+
+    result: dict = {
+        "source": source,
+        "page": page,
+        "url": url,
+        "watermark_case": _read_watermark(source),
+        "watermark_page": _read_watermark_page(source),
+        "request_headers_sample": {
+            "tenantid": headers.get("tenantid"),
+            "tenantname": headers.get("tenantname"),
+            "tyler-tenanturl": headers.get("tyler-tenanturl"),
+            "user-agent": headers.get("user-agent"),
+        },
+    }
+    try:
+        r = _rq.post(url, json=body, headers=headers, timeout=30)
+        result["http_status"] = r.status_code
+        result["response_headers"] = dict(r.headers)
+        result["response_body_first_1500"] = r.text[:1500]
+        try:
+            d = r.json()
+            result["api_success"] = d.get("Success")
+            result["api_error_message"] = d.get("ErrorMessage")
+            rows = (d.get("Result") or {}).get("EntityResults") or []
+            result["entity_results_count"] = len(rows)
+            if rows:
+                result["first_case"] = {
+                    "CaseNumber": rows[0].get("CaseNumber"),
+                    "ApplyDate":  rows[0].get("ApplyDate"),
+                }
+        except Exception as e:
+            result["json_parse_error"] = str(e)
+    except Exception as e:
+        result["request_exception"] = f"{type(e).__name__}: {e}"
+    return jsonify(result)
+
+
 @app.post("/actions/pull-homestead-tyler-backfill-june3")
 @require_admin
 def action_homestead_tyler_backfill_june3():
