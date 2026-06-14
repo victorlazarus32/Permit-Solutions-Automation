@@ -210,7 +210,9 @@ app.secret_key = _load_or_create_secret()
 # Endpoints that bypass the login gate.
 # webhook_lob is open because Lob can't log in — its requests are
 # authenticated by HMAC signature instead (see lob_sender/webhook.py).
-_OPEN_ENDPOINTS = {"login", "static", "webhook_lob"}
+# action_cron_daily_run is open because GitHub Actions can't log in — its
+# requests are authenticated by the X-Cron-Secret header instead.
+_OPEN_ENDPOINTS = {"login", "static", "webhook_lob", "action_cron_daily_run"}
 
 
 @app.before_request
@@ -2390,6 +2392,51 @@ def action_homestead_tyler_backfill_june3():
         flash("Rewriting Tyler watermark to just before June 3, 2026 and "
               "pulling everything newer. About 30 seconds.", "info")
     return redirect(url_for("dashboard"))
+
+
+@app.post("/actions/cron-daily-run")
+def action_cron_daily_run():
+    """Webhook-triggered daily pull. Called by GitHub Actions on a cron
+    schedule. Authenticated via the X-Cron-Secret header matching the
+    CRON_SECRET env var (NOT session-based — this endpoint is in the
+    _OPEN_ENDPOINTS allow-list so a non-logged-in caller can reach it).
+
+    Runs all three live connectors sequentially in-process so they share
+    the same DB connection and persistent disk as the web service. Returns
+    a JSON summary; the cron caller logs it for visibility."""
+    expected = (os.environ.get("CRON_SECRET") or "").strip()
+    provided = (request.headers.get("X-Cron-Secret") or "").strip()
+    if not expected:
+        log.error("cron daily-run: CRON_SECRET env var not configured")
+        return jsonify({"error": "cron not configured"}), 503
+    if not provided or provided != expected:
+        log.warning("cron daily-run: missing/wrong X-Cron-Secret from %s",
+                    request.remote_addr)
+        return jsonify({"error": "auth required"}), 401
+
+    started = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    log.info("cron daily-run started at %s", started)
+
+    results: dict = {}
+    for name, fn in (
+        ("miami_dade", run_miami_dade),
+        ("homestead",  run_homestead_tyler),
+        ("pinecrest",  run_pinecrest_etrakit),
+    ):
+        try:
+            results[name] = fn()
+            log.info("cron daily-run: %s -> %s", name, results[name])
+        except Exception as e:
+            log.exception("cron daily-run: %s failed", name)
+            results[name] = {"error": f"{type(e).__name__}: {e}"}
+
+    finished = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    log.info("cron daily-run finished at %s", finished)
+    return jsonify({
+        "started_at":  started,
+        "finished_at": finished,
+        "results":     results,
+    })
 
 
 @app.post("/actions/enrich-homestead-owners")

@@ -1,0 +1,43 @@
+name: Daily pull (Miami-Dade + Homestead + Pinecrest)
+
+# Fires every morning at 10:00 UTC (6:00 AM Eastern, 7:00 AM during DST).
+# Calls the production webhook which runs all three live connectors
+# sequentially against the production DB on Render's persistent disk.
+#
+# GitHub Actions scheduled workflows can be delayed by up to ~15 minutes
+# during high-load periods. That's fine for this use case — we don't need
+# precise timing, just "before Victor opens the operator console each
+# morning."
+#
+# Manual trigger: Actions tab on GitHub → "Daily pull" → "Run workflow".
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Hit production cron webhook
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET repo secret is not set"
+            exit 1
+          fi
+          # --fail returns non-zero on HTTP 4xx/5xx so failures surface in
+          # the Actions log; --max-time guards against the web service
+          # hanging mid-connector. Body is captured so the JSON summary is
+          # visible in the run output.
+          curl --fail --silent --show-error --max-time 600 \
+               -X POST \
+               -H "X-Cron-Secret: $CRON_SECRET" \
+               -H "Content-Type: application/json" \
+               https://app.permitsolutions.us/actions/cron-daily-run \
+            | tee response.json
+          echo
+          echo "OK"
