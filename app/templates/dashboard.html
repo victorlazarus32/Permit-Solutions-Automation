@@ -53,6 +53,11 @@
     Pulled {{ task.result.inserted }} new Pinecrest cases in scope
     ({{ task.result.fetched }} fetched, {{ task.result.in_scope }} matched keywords).
     {% if task.result.error %}<br><strong>Note:</strong> {{ task.result.error }}{% endif %}
+  {% elif task.kind == 'enrich_homestead' %}
+    Owner enrichment retried for Homestead:
+    enriched {{ task.result.enriched }} of {{ task.result.before }} rows
+    (still missing owner data: {{ task.result.after }}).
+    {% if task.result.error %}<br><strong>Note:</strong> {{ task.result.error }}{% endif %}
   {% elif task.kind == 'homestead' %}
     Processed {{ task.result.files }} PRR file(s); {{ task.result.inserted }} new cases.
   {% elif task.kind == 'send' %}
@@ -422,6 +427,17 @@
             onsubmit="return confirm('Reset Tyler watermark to June 3, 2026 and re-pull all cases newer than that?');">
         <button type="submit" class="btn-secondary btn-tiny" {% if task.running %}disabled{% endif %}>
           ⟲ Backfill since June 3
+        </button>
+      </form>
+      <p style="font-size: 0.78rem; color: var(--ink-mute); margin: 10px 0 6px;">
+        Use when the pull pulled rows but the queue shows few/none. Re-runs the
+        Property Appraiser owner lookup for every Homestead row still missing
+        owner data so they appear in the mail queue.
+      </p>
+      <form method="POST" action="{{ url_for('action_enrich_homestead_owners') }}"
+            onsubmit="return confirm('Retry Property Appraiser lookups for every Homestead row missing owner data?');">
+        <button type="submit" class="btn-secondary btn-tiny" {% if task.running %}disabled{% endif %}>
+          ⟲ Retry owner enrichment
         </button>
       </form>
     </details>

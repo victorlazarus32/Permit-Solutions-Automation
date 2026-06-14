@@ -57,6 +57,7 @@ from db import DB_PATH, init_db, connect as db_connect
 init_db()
 from scripts.morning_run import (run_miami_dade, run_homestead,
                                   run_homestead_tyler, run_homestead_tyler_since,
+                                  retry_homestead_owner_enrichment,
                                   run_pinecrest_etrakit,
                                   fetch_totals, run_send)
 
@@ -2388,6 +2389,21 @@ def action_homestead_tyler_backfill_june3():
     else:
         flash("Rewriting Tyler watermark to just before June 3, 2026 and "
               "pulling everything newer. About 30 seconds.", "info")
+    return redirect(url_for("dashboard"))
+
+
+@app.post("/actions/enrich-homestead-owners")
+@require_admin
+def action_enrich_homestead_owners():
+    """Retry the Property Appraiser owner lookup for every Homestead row that
+    still lacks owner data. Pulled rows show in the queue only after they
+    have both owner name and mailing address; this is the recovery hatch
+    when the lookups failed silently the first time."""
+    if not _start_task("enrich_homestead", retry_homestead_owner_enrichment):
+        flash("Another task is already running. Wait for it to finish.", "warning")
+    else:
+        flash("Re-running Property Appraiser lookups for Homestead rows missing "
+              "owner data. Takes about 30 seconds per 100 rows.", "info")
     return redirect(url_for("dashboard"))
 
 

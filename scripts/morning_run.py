@@ -214,6 +214,48 @@ def run_homestead_tyler() -> dict:
                 "error": f"Homestead Tyler pull failed: {e}. Tell Victor."}
 
 
+def retry_homestead_owner_enrichment() -> dict:
+    """
+    Re-run the Property Appraiser owner lookup for every Homestead row that
+    still has no owner data. Useful when Tyler pull succeeded but the PA
+    lookups failed (transient PA outage, rate limiting, etc.) so the rows
+    sit in the DB unmailable.
+
+    Idempotent. Counts the eligible rows up-front so the caller can show
+    a real before/after delta.
+    """
+    import sqlite3
+    from db import DB_PATH
+    from connectors.tyler_energov import _enrich_owners_for
+
+    def _unenriched_count() -> int:
+        with sqlite3.connect(DB_PATH) as conn:
+            r = conn.execute(
+                """
+                SELECT COUNT(*) FROM violations
+                 WHERE source = 'homestead'
+                   AND folio_number IS NOT NULL AND folio_number <> ''
+                   AND ( owner_full_name      IS NULL OR owner_full_name      = ''
+                      OR owner_mailing_address IS NULL OR owner_mailing_address = ''
+                      OR comments LIKE '%NEEDS_OWNER_LOOKUP%' )
+                """
+            ).fetchone()
+        return int(r[0])
+
+    log = logging.getLogger("homestead")
+    try:
+        before = _unenriched_count()
+        if before == 0:
+            return {"before": 0, "enriched": 0, "after": 0, "error": None}
+        enriched = _enrich_owners_for("homestead", log=log)
+        after = _unenriched_count()
+        return {"before": before, "enriched": enriched, "after": after, "error": None}
+    except Exception as e:
+        logging.exception("homestead owner enrichment retry failed")
+        return {"before": 0, "enriched": 0, "after": 0,
+                "error": f"Enrichment retry failed: {e}. Tell Victor."}
+
+
 def run_homestead_tyler_since(since_case_number: str, near_page: int = 1) -> dict:
     """
     Recovery action: rewrite the Tyler watermark to a specific case number
