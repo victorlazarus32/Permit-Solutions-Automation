@@ -289,6 +289,47 @@
     </div>
     {% endif %}
 
+    {% if inv.deposit_amount and inv.deposit_amount > 0 and inv.status != 'void' %}
+    {% set deposit_paid = (inv.amount_paid or 0) + 0.005 >= inv.deposit_amount %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Deposit</h3>
+      <div class="lead-kv">
+        <div class="kv"><span class="k">Amount</span><span class="v">${{ '{:,.2f}'.format(inv.deposit_amount) }}</span></div>
+        <div class="kv"><span class="k">Status</span><span class="v">
+          {% if deposit_paid %}
+            <span class="status status-paid">✓ PAID</span>
+          {% else %}
+            <span class="status status-partial">DUE</span>
+          {% endif %}
+        </span></div>
+      </div>
+      {% if not deposit_paid %}
+      <form method="POST" action="{{ url_for('invoice_record_deposit', invoice_id=inv.id) }}" style="margin-top: 10px;">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="dep_method">Method</label>
+            <select name="method" id="dep_method">
+              <option value="zelle">Zelle</option>
+              <option value="check">Check</option>
+              <option value="cash">Cash</option>
+              <option value="card">Card</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="dep_reference">Reference</label>
+            <input type="text" name="reference" id="dep_reference" placeholder="optional">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" style="margin-top: 8px;">Mark deposit paid (${{ '{:,.2f}'.format(inv.deposit_amount - (inv.amount_paid or 0)) }})</button>
+        {% if inv.status == 'draft' %}
+        <p class="lead-card-desc" style="margin-top: 6px;">Recording the deposit will mark this invoice as sent.</p>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {% if inv.status in ('sent', 'partial') %}
     <div class="lead-card">
       <h3 class="lead-card-title">Record Payment</h3>

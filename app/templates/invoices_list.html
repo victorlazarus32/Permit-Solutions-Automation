@@ -73,6 +73,7 @@
         <th>Issued</th>
         <th>Due</th>
         <th class="num">Total</th>
+        <th class="num">Deposit</th>
         <th class="num">Balance</th>
         <th>Status</th>
         <th></th>
@@ -93,6 +94,18 @@
           {% if inv.is_overdue %}<span class="status status-failed" style="margin-left: 4px;">OVERDUE</span>{% endif %}
         </td>
         <td class="num">${{ '{:,.2f}'.format(inv.total) }}</td>
+        <td class="num">
+          {% if inv.deposit_amount and inv.deposit_amount > 0 %}
+            ${{ '{:,.2f}'.format(inv.deposit_amount) }}<br>
+            {% if (inv.amount_paid or 0) + 0.005 >= inv.deposit_amount %}
+              <span class="deposit-badge deposit-paid">✓ Paid</span>
+            {% else %}
+              <span class="deposit-badge deposit-due">Due</span>
+            {% endif %}
+          {% else %}
+            <span style="color: var(--ink-mute);">—</span>
+          {% endif %}
+        </td>
         <td class="num">
           {% if inv.balance_due > 0 %}
             <strong>${{ '{:,.2f}'.format(inv.balance_due) }}</strong>
@@ -170,6 +183,18 @@
   .status-paid    { background: var(--emerald-soft); color: var(--emerald); }
   .status-void    { background: #f3f4f6;            color: #6b7280; text-decoration: line-through; }
   .status-overdue, .status-failed { background: var(--red-soft); color: var(--red); }
+
+  .deposit-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  .deposit-paid { background: var(--emerald-soft); color: var(--emerald); }
+  .deposit-due  { background: var(--amber-soft);   color: var(--amber); }
 </style>
 
 {% endblock %}

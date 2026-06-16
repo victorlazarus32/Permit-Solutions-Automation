@@ -1737,6 +1737,47 @@ def invoice_record_payment(invoice_id: int):
     return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
 
+@app.post("/invoices/<int:invoice_id>/record-deposit")
+def invoice_record_deposit(invoice_id: int):
+    """One-click: record the invoice's deposit as paid.
+
+    Records a payment equal to the still-uncollected portion of the deposit, so
+    amount_paid reaches the deposit and the 'Deposit ✓ Paid' badge shows. Drafts
+    are marked sent first (you can't have collected a deposit on an unsent draft).
+    """
+    try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
+
+    deposit = float(existing.get("deposit_amount") or 0)
+    already = float(existing.get("amount_paid") or 0)
+    if deposit <= 0:
+        flash("This invoice has no deposit set. Edit the invoice to add one first.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    shortfall = round(deposit - already, 2)
+    if shortfall <= 0:
+        flash("The deposit is already covered by recorded payments.", "info")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+    f = request.form
+    method    = _fs(f, "method") or "zelle"
+    reference = _fs(f, "reference") or "Deposit"
+    try:
+        if existing["status"] == "draft":
+            inv_mod.mark_sent(invoice_id)
+        inv = inv_mod.record_payment(invoice_id, amount=shortfall, method=method, reference=reference)
+    except (ValueError, LookupError) as e:
+        flash(str(e), "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    flash(f"Deposit of ${shortfall:,.2f} recorded. Balance: ${inv['balance_due']:,.2f}.", "success")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+
 @app.post("/invoices/<int:invoice_id>/void")
 def invoice_void(invoice_id: int):
     try:
