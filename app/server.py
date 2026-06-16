@@ -1759,22 +1759,31 @@ def invoice_record_deposit(invoice_id: int):
     if deposit <= 0:
         flash("This invoice has no deposit set. Edit the invoice to add one first.", "error")
         return redirect(url_for("invoice_detail", invoice_id=invoice_id))
-    shortfall = round(deposit - already, 2)
-    if shortfall <= 0:
-        flash("The deposit is already covered by recorded payments.", "info")
-        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
     f = request.form
-    method    = _fs(f, "method") or "zelle"
-    reference = _fs(f, "reference") or "Deposit"
+    method    = _fs(f, "method")
+    reference = _fs(f, "reference")
+    paid_at   = _fs(f, "paid_at")  # YYYY-MM-DD from the date picker; None -> today
+    shortfall = round(deposit - already, 2)
     try:
-        if existing["status"] == "draft":
-            inv_mod.mark_sent(invoice_id)
-        inv = inv_mod.record_payment(invoice_id, amount=shortfall, method=method, reference=reference)
+        if shortfall > 0:
+            # Deposit not yet collected: record the money + stamp the details.
+            if existing["status"] == "draft":
+                inv_mod.mark_sent(invoice_id)
+            inv = inv_mod.record_deposit(
+                invoice_id, amount=shortfall,
+                method=method or "zelle", reference=reference or "Deposit", paid_at=paid_at,
+            )
+            flash(f"Deposit of ${shortfall:,.2f} recorded. Balance: ${inv['balance_due']:,.2f}.", "success")
+        else:
+            # Already collected: just set/correct the date, method, and reference
+            # (COALESCE keeps existing values when a field is left blank).
+            inv_mod.update_deposit_details(
+                invoice_id, paid_at=paid_at, method=method, reference=reference
+            )
+            flash("Deposit details updated.", "success")
     except (ValueError, LookupError) as e:
         flash(str(e), "error")
-        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
-    flash(f"Deposit of ${shortfall:,.2f} recorded. Balance: ${inv['balance_due']:,.2f}.", "success")
     return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
 

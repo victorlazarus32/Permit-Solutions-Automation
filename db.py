@@ -510,6 +510,9 @@ def _migrate_invoices(conn) -> None:
         ("property_zip",   "TEXT"),
         ("contract_id",    "INTEGER"),                    # FK -> contracts.id, nullable
         ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
+        ("deposit_paid_at",   "TEXT"),                    # date the deposit was collected (YYYY-MM-DD)
+        ("deposit_method",    "TEXT"),                    # how the deposit was paid: zelle/check/cash/card/other
+        ("deposit_reference", "TEXT"),                    # optional reference for the deposit payment
         ("scope_of_services", "TEXT"),                    # assembled scope text for this invoice
         ("client_summary",    "TEXT"),                    # plain-English "what this means" blurb for the client
         ("workflow_status",   "TEXT NOT NULL DEFAULT 'intake'"),  # permit workflow stage (formerly the Job's status)

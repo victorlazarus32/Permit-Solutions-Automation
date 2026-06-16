@@ -457,6 +457,63 @@ def record_payment(
     return get_invoice(invoice_id)
 
 
+def record_deposit(
+    invoice_id: int,
+    *,
+    amount: float,
+    method: str | None = None,
+    reference: str | None = None,
+    paid_at: str | None = None,
+) -> dict:
+    """Record the deposit as paid.
+
+    Applies `amount` as a payment (so amount_paid / balance update like any other
+    payment) and stamps the deposit-specific date/method/reference so the invoice
+    can show *when* and *how* the deposit came in -- separate from any later
+    balance payment, which may use a different method on a different day.
+    """
+    record_payment(invoice_id, amount=amount, method=method, reference=reference)
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE invoices
+               SET deposit_paid_at   = ?,
+                   deposit_method    = ?,
+                   deposit_reference = ?,
+                   updated_at        = ?
+             WHERE id = ?
+            """,
+            (paid_at or date.today().isoformat(), method, reference, _now(), invoice_id),
+        )
+    return get_invoice(invoice_id)
+
+
+def update_deposit_details(
+    invoice_id: int,
+    *,
+    paid_at: str | None = None,
+    method: str | None = None,
+    reference: str | None = None,
+) -> dict:
+    """Set/correct the deposit's date, method, and reference without changing the
+    money already recorded. Used to backfill or fix details on a deposit that has
+    already been marked paid."""
+    get_invoice(invoice_id)  # raises if missing
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE invoices
+               SET deposit_paid_at   = COALESCE(?, deposit_paid_at),
+                   deposit_method    = COALESCE(?, deposit_method),
+                   deposit_reference = COALESCE(?, deposit_reference),
+                   updated_at        = ?
+             WHERE id = ?
+            """,
+            (paid_at or None, method or None, reference or None, _now(), invoice_id),
+        )
+    return get_invoice(invoice_id)
+
+
 def void_invoice(invoice_id: int, reason: str | None = None) -> dict:
     inv = get_invoice(invoice_id)
     if inv["status"] == "void":
@@ -697,7 +754,9 @@ def list_by_workflow_status(workflow_status: str | None = None, owner: str | Non
     params.append(int(limit))
     with connect() as conn:
         rows = conn.execute(sql, params).fetchall()
-    return [dict(r) for r in rows]
+    # Run through _row_to_dict so derived fields (balance_due, is_overdue) the
+    # invoices list template depends on are present -- raw dict(r) lacks them.
+    return [_row_to_dict(r) for r in rows]
 
 
 def transition_workflow(invoice_id: int, *, to_status: str,

@@ -302,10 +302,23 @@
             <span class="status status-partial">DUE</span>
           {% endif %}
         </span></div>
+        {% if deposit_paid and inv.deposit_paid_at %}
+        <div class="kv"><span class="k">Paid on</span><span class="v">{{ inv.deposit_paid_at }}</span></div>
+        {% endif %}
+        {% if deposit_paid and inv.deposit_method %}
+        <div class="kv"><span class="k">Method</span><span class="v">{{ inv.deposit_method|capitalize }}</span></div>
+        {% endif %}
+        {% if deposit_paid and inv.deposit_reference %}
+        <div class="kv"><span class="k">Reference</span><span class="v mono">{{ inv.deposit_reference }}</span></div>
+        {% endif %}
       </div>
       {% if not deposit_paid %}
       <form method="POST" action="{{ url_for('invoice_record_deposit', invoice_id=inv.id) }}" style="margin-top: 10px;">
         <div class="form-row">
+          <div class="form-field">
+            <label for="dep_paid_at">Date paid</label>
+            <input type="date" name="paid_at" id="dep_paid_at" value="{{ today_iso }}">
+          </div>
           <div class="form-field">
             <label for="dep_method">Method</label>
             <select name="method" id="dep_method">
@@ -316,8 +329,10 @@
               <option value="other">Other</option>
             </select>
           </div>
+        </div>
+        <div class="form-row single">
           <div class="form-field">
-            <label for="dep_reference">Reference</label>
+            <label for="dep_reference">Reference (check #, txn id...)</label>
             <input type="text" name="reference" id="dep_reference" placeholder="optional">
           </div>
         </div>
@@ -326,6 +341,33 @@
         <p class="lead-card-desc" style="margin-top: 6px;">Recording the deposit will mark this invoice as sent.</p>
         {% endif %}
       </form>
+      {% else %}
+      <details style="margin-top: 10px;">
+        <summary style="cursor: pointer; font-size: 0.8rem; color: var(--ink-mute);">Edit deposit details</summary>
+        <form method="POST" action="{{ url_for('invoice_record_deposit', invoice_id=inv.id) }}" style="margin-top: 8px;">
+          <div class="form-row">
+            <div class="form-field">
+              <label for="dep_paid_at_edit">Date paid</label>
+              <input type="date" name="paid_at" id="dep_paid_at_edit" value="{{ inv.deposit_paid_at or today_iso }}">
+            </div>
+            <div class="form-field">
+              <label for="dep_method_edit">Method</label>
+              <select name="method" id="dep_method_edit">
+                {% for m in ['zelle','check','cash','card','other'] %}
+                  <option value="{{ m }}" {% if inv.deposit_method == m %}selected{% endif %}>{{ m|capitalize }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="form-field">
+              <label for="dep_reference_edit">Reference (check #, txn id...)</label>
+              <input type="text" name="reference" id="dep_reference_edit" value="{{ inv.deposit_reference or '' }}" placeholder="optional">
+            </div>
+          </div>
+          <button type="submit" class="btn-secondary btn-tiny" style="margin-top: 8px;">Save details</button>
+        </form>
+      </details>
       {% endif %}
     </div>
     {% endif %}
