@@ -576,14 +576,19 @@ def list_invoices(
     source: str | None = None,
     case_number: str | None = None,
     owner: str | None = None,
+    exclude_void: bool = False,
     limit: int = 500,
 ) -> list[dict]:
     """Filterable list. status='overdue' returns derived-overdue rows (sent/partial with past due_at).
 
     `owner`: if set, restrict to invoices owned by this username. If None, no
-    owner filter (callers gating by role should pass the username explicitly)."""
+    owner filter (callers gating by role should pass the username explicitly).
+    `exclude_void`: drop voided invoices (used by the "All" view so void rows
+    only surface under the Void tab)."""
     sql = "SELECT * FROM invoices WHERE 1=1"
     params: list[Any] = []
+    if exclude_void:
+        sql += " AND status != 'void'"
     if status == "overdue":
         sql += " AND status IN ('sent','partial') AND due_at IS NOT NULL AND due_at < ?"
         params.append(date.today().isoformat())

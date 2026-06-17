@@ -1454,7 +1454,11 @@ def invoices_list():
     if workflow_status:
         invoices = inv_mod.list_by_workflow_status(workflow_status, owner=scope_owner, limit=500)
     else:
-        invoices = inv_mod.list_invoices(status=status, owner=scope_owner, limit=500)
+        # The "All" view (no status filter) shows only active invoices —
+        # voided ones surface only under the Void tab.
+        invoices = inv_mod.list_invoices(
+            status=status, owner=scope_owner, exclude_void=(status is None), limit=500
+        )
     stats = inv_mod.summary_stats(owner=scope_owner)
     return render_template(
         "invoices_list.html",
