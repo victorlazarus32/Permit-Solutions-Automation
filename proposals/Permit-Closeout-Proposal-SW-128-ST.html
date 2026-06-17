@@ -109,16 +109,11 @@
 
   /* ===== Signature / acceptance ===== */
   .sig-block { page-break-inside: avoid; margin-top: 8pt; }
-  .accepted { font-weight: 600; font-size: 9pt; margin: 8pt 0 2pt 0; }
-  .sig-row { display: table; width: 100%; border-spacing: 0; }
-  .sig-cell { display: table-cell; vertical-align: bottom; width: 50%; padding-top: 12pt; }
-  .sig-cell.left { padding-right: 16pt; }
-  .sig-cell.right { padding-left: 16pt; }
-  .sig-cell.full { display: block; width: 100%; padding-top: 14pt; }
-  .sig-line { border-bottom: 0.6pt solid #000; height: 13pt; }
-  .sig-label { font-size: 7.5pt; color: #555; letter-spacing: 0.03em; margin-top: 2pt; }
-  .sig-name { font-weight: 600; font-size: 10pt; margin-top: 10pt; }
-  .sig-title { font-size: 8.5pt; letter-spacing: 0.03em; }
+  .accepted { font-weight: 600; font-size: 9pt; margin: 10pt 0 2pt 0; }
+  .sig-field { display: table; width: 100%; margin-top: 15pt; font-size: 9pt; }
+  .sig-field .lbl { display: table-cell; white-space: nowrap; padding-right: 8pt; vertical-align: bottom; }
+  .sig-field .ln  { display: table-cell; width: 100%; border-bottom: 0.6pt solid #000; }
+  .sig-party { font-weight: 600; font-size: 9pt; margin-top: 18pt; }
 
   .footer {
     text-align: center; font-size: 7pt; letter-spacing: 0.1em; color: #000;
@@ -200,8 +195,9 @@
           <span class="desc">Balance on completion (50%)</span>
           <span class="amt">$4,875</span>
         </div>
-        <div class="box-note">The remaining balance is due upon the closure of all expired permits listed in
-        this proposal with Miami-Dade County.</div>
+        <div class="box-note"><strong>Balance Due.</strong> The remaining balance is due upon written
+        confirmation that all expired permits listed in this Agreement have been closed, administratively
+        cleared, or otherwise resolved with Miami-Dade County.</div>
       </div>
     </div>
   </div>
@@ -265,6 +261,10 @@
     <li>Work required because of inspection failure</li>
     <li>Work required because the original permitted condition no longer exists</li>
   </ul>
+  <p style="margin-top: 6pt;"><strong>Licensed Trade Work Not Included.</strong> Permit Solutions does not
+  perform licensed electrical, mechanical, fire alarm, building, or repair work under this Agreement. If any
+  licensed trade work is required, Client must hire the appropriate licensed contractor under a separate
+  agreement.</p>
 
   <!-- 12. No Guarantee of County Action -->
   <div class="clause">
@@ -392,43 +392,14 @@
 
     <div class="accepted">Accepted and agreed:</div>
 
-    <div class="sig-cell full">
-      <div class="sig-line"></div>
-      <div class="sig-label">Client / Authorized Representative</div>
-    </div>
-    <div class="sig-row">
-      <div class="sig-cell left">
-        <div class="sig-line"></div>
-        <div class="sig-label">Name</div>
-      </div>
-      <div class="sig-cell right">
-        <div class="sig-line"></div>
-        <div class="sig-label">Title</div>
-      </div>
-    </div>
-    <div class="sig-row">
-      <div class="sig-cell left">
-        <div class="sig-line"></div>
-        <div class="sig-label">Company</div>
-      </div>
-      <div class="sig-cell right">
-        <div class="sig-line"></div>
-        <div class="sig-label">Date</div>
-      </div>
-    </div>
+    <div class="sig-field"><span class="lbl">Client / Authorized Representative:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Name:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Title:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Company:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Date:</span><span class="ln"></span></div>
 
-    <div class="sig-name">Permit Solutions &mdash; Victor L. Moreno</div>
-    <div class="sig-title">Founder &amp; Compliance Consultant</div>
-    <div class="sig-row">
-      <div class="sig-cell left">
-        <div class="sig-line"></div>
-        <div class="sig-label">Signature</div>
-      </div>
-      <div class="sig-cell right">
-        <div class="sig-line"></div>
-        <div class="sig-label">Date</div>
-      </div>
-    </div>
+    <div class="sig-field"><span class="lbl">Permit Solutions &mdash; Victor L. Moreno:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Date:</span><span class="ln"></span></div>
   </div>
 
   <div class="footer">
