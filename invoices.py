@@ -258,6 +258,7 @@ def create_invoice(
     property_zip: str | None = None,
     source: str | None = None,
     case_number: str | None = None,
+    permit_number: str | None = None,
     contract_event_id: int | None = None,
     contract_id: int | None = None,
     tax_rate: float = 0.0,
@@ -283,7 +284,7 @@ def create_invoice(
         cur = conn.execute(
             """
             INSERT INTO invoices (
-                invoice_number, source, case_number, contract_event_id, contract_id,
+                invoice_number, source, case_number, permit_number, contract_event_id, contract_id,
                 client_name, client_address, client_city, client_state, client_zip,
                 client_email, client_phone,
                 property_address, property_city, property_state, property_zip,
@@ -292,7 +293,7 @@ def create_invoice(
                 client_summary, owner,
                 created_at, updated_at
             ) VALUES (
-                :invoice_number, :source, :case_number, :contract_event_id, :contract_id,
+                :invoice_number, :source, :case_number, :permit_number, :contract_event_id, :contract_id,
                 :client_name, :client_address, :client_city, :client_state, :client_zip,
                 :client_email, :client_phone,
                 :property_address, :property_city, :property_state, :property_zip,
@@ -306,6 +307,7 @@ def create_invoice(
                 "invoice_number":    number,
                 "source":            source,
                 "case_number":       case_number,
+                "permit_number":     permit_number,
                 "contract_event_id": contract_event_id,
                 "contract_id":       contract_id,
                 "client_name":       client_name.strip(),
@@ -366,6 +368,7 @@ def update_invoice(invoice_id: int, **fields) -> dict:
         "property_address", "property_city", "property_state", "property_zip",
         "due_at", "terms", "notes", "tax_rate", "contract_id",
         "deposit_amount", "scope_of_services", "client_summary",
+        "permit_number",
     }
     payload: dict[str, Any] = {}
     for k, v in fields.items():

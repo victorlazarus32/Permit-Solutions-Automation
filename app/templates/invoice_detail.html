@@ -43,12 +43,13 @@
         {% if inv.client_email   %}<div class="kv"><span class="k">Email</span><span class="v mono">{{ inv.client_email }}</span></div>{% endif %}
       </div>
     </div>
-    {% if inv.property_address or prop_csz.strip() %}
+    {% if inv.property_address or prop_csz.strip() or inv.permit_number %}
     <div class="lead-card">
       <h3 class="lead-card-title">Property</h3>
       <div class="lead-kv">
         {% if inv.property_address %}<div class="kv"><span class="k">Street</span><span class="v">{{ inv.property_address }}</span></div>{% endif %}
         {% if prop_csz.strip() %}<div class="kv"><span class="k">City/State/Zip</span><span class="v">{{ prop_csz }}</span></div>{% endif %}
+        {% if inv.permit_number %}<div class="kv"><span class="k">Permit #</span><span class="v mono">{{ inv.permit_number }}</span></div>{% endif %}
       </div>
     </div>
     {% endif %}

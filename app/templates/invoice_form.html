@@ -53,6 +53,14 @@
              value="{{ invoice.property_zip if is_edit else p.property_zip or '' }}">
     </div>
   </div>
+  <div class="form-row single">
+    <div class="form-field">
+      <label for="permit_number">Permit number</label>
+      <input type="text" name="permit_number" id="permit_number"
+             placeholder="e.g. B-2026-012345"
+             value="{{ invoice.permit_number if is_edit else p.permit_number or '' }}">
+    </div>
+  </div>
 
   <h3 class="lead-card-title" style="margin-top: 1.5rem;">Bill To</h3>
   <div class="form-row">

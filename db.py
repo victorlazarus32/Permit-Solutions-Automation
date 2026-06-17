@@ -509,6 +509,7 @@ def _migrate_invoices(conn) -> None:
         ("property_state", "TEXT"),
         ("property_zip",   "TEXT"),
         ("contract_id",    "INTEGER"),                    # FK -> contracts.id, nullable
+        ("permit_number",  "TEXT"),                        # municipal permit number for the job, entered at intake
         ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
         ("deposit_paid_at",   "TEXT"),                    # date the deposit was collected (YYYY-MM-DD)
         ("deposit_method",    "TEXT"),                    # how the deposit was paid: zelle/check/cash/card/other
