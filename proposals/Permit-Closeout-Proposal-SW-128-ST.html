@@ -1,0 +1,295 @@
+<!--
+  Permit Solutions Services — Client Proposal
+  Expired-permit close-out, two commercial properties on SW 128 ST.
+  11 expired permits (the two 2020 paving permits excluded per client).
+  $975 each (volume rate, standard $1,250). Total $10,725.
+  One-off client document. Open in a browser, Ctrl+P, Save as PDF.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Permit Solutions Services — Permit Close-Out Proposal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  @page { size: letter; margin: 0.6in 0 0.6in 0; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 10pt; line-height: 1.5; color: #000; font-weight: 400;
+  }
+  .page { padding: 0.35in 0.85in 0 0.85in; }
+
+  /* ===== Header ===== */
+  .header { display: table; width: 100%; margin: 0 0 0.04in 0; }
+  .header .brand { display: table-cell; vertical-align: top; text-align: left; width: 70%; padding-right: 18pt; }
+  .header .contact {
+    display: table-cell; vertical-align: top; text-align: right; width: 30%;
+    font-size: 8.5pt; line-height: 1.45; color: #000; letter-spacing: 0.01em;
+  }
+  .wordmark {
+    font-weight: 700; font-size: 15.5pt; letter-spacing: 0.12em; color: #000;
+    text-transform: uppercase; line-height: 1.1; white-space: nowrap;
+  }
+  .tagline { margin-top: 5pt; font-size: 8pt; letter-spacing: 0.06em; color: #000; white-space: nowrap; }
+  .contact-line { display: block; }
+  hr.accent { border: 0; border-top: 1.25pt solid #c2410c; margin: 9pt 0 12pt 0; }
+
+  /* ===== Title + meta ===== */
+  .doc-title { font-size: 13pt; font-weight: 700; letter-spacing: 0.02em; margin: 4pt 0 2pt 0; }
+  .doc-sub { font-size: 9pt; color: #333; margin-bottom: 12pt; }
+
+  .meta-row { display: table; width: 100%; margin: 0 0 14pt 0; font-size: 9pt; }
+  .meta-row .cell { display: table-cell; vertical-align: top; width: 50%; }
+  .meta-row .cell.right { text-align: right; }
+  .meta-row .label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 7.5pt; color: #666; display: block; margin-bottom: 1pt; }
+
+  p { margin: 0 0 7pt 0; }
+
+  .section-heading {
+    font-size: 8.5pt; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #111; margin: 18pt 0 6pt 0; border-bottom: 0.4pt solid #ddd; padding-bottom: 3pt;
+  }
+
+  /* ===== Pricing summary box ===== */
+  .price-box {
+    border: 1pt solid #000; border-radius: 4pt; padding: 12pt 14pt; margin: 6pt 0 4pt 0;
+  }
+  .price-line { display: table; width: 100%; font-size: 9.5pt; margin-bottom: 4pt; }
+  .price-line .desc { display: table-cell; text-align: left; }
+  .price-line .amt { display: table-cell; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .price-line.total { font-weight: 700; font-size: 12pt; border-top: 0.6pt solid #000; padding-top: 7pt; margin-top: 7pt; }
+  .price-line.total .amt { color: #c2410c; }
+  .strike { text-decoration: line-through; color: #888; }
+  .save-note { font-size: 8.5pt; color: #065f46; margin-top: 5pt; letter-spacing: 0.01em; }
+
+  /* ===== Permit tables ===== */
+  .prop-head { font-size: 10pt; font-weight: 600; margin: 12pt 0 2pt 0; }
+  .prop-sub { font-size: 8pt; color: #666; letter-spacing: 0.02em; margin-bottom: 5pt; }
+  table.permits { width: 100%; border-collapse: collapse; font-size: 8.7pt; margin-bottom: 4pt; }
+  table.permits th {
+    text-align: left; padding: 4pt 6pt; font-size: 7pt; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #666; border-bottom: 0.6pt solid #000;
+  }
+  table.permits th.amt, table.permits td.amt { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.permits td { padding: 4pt 6pt; border-bottom: 0.4pt solid #e2e2e2; vertical-align: top; }
+  table.permits .ref { font-family: "SFMono-Regular", Consolas, monospace; font-size: 8.2pt; white-space: nowrap; }
+  table.permits tfoot td { font-weight: 600; border-top: 0.6pt solid #000; border-bottom: 0; padding-top: 5pt; }
+
+  ul.work { margin: 2pt 0 4pt 0; padding-left: 15pt; }
+  ul.work li { margin-bottom: 4pt; }
+
+  .note-box {
+    border-left: 2.5pt solid #c2410c; background: #fff7ed; padding: 8pt 12pt;
+    font-size: 8.8pt; margin: 8pt 0; line-height: 1.45;
+  }
+
+  /* ===== Sign-off ===== */
+  hr.sig-divider { border: 0; border-top: 0.4pt solid #000; margin: 22pt 0 14pt 0; }
+  .signoff .closing { margin-bottom: 22pt; }
+  .signoff .name { font-weight: 600; font-size: 11pt; letter-spacing: 0.02em; }
+  .signoff .title { font-size: 9pt; letter-spacing: 0.04em; margin-top: 1pt; }
+
+  .footer {
+    text-align: center; font-size: 7.5pt; letter-spacing: 0.12em; color: #000;
+    margin-top: 24pt; padding-top: 7pt; border-top: 0.4pt solid #000; text-transform: uppercase;
+  }
+  .footer .url { display: block; margin-top: 3pt; letter-spacing: 0.04em; text-transform: none; }
+  .page-break { page-break-after: always; break-after: page; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <div class="wordmark">Permit Solutions</div>
+      <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+    </div>
+    <div class="contact">
+      <span class="contact-line">305-600-9422</span>
+      <span class="contact-line">help@permitsolutions.us</span>
+      <span class="contact-line">www.permitsolutions.us</span>
+    </div>
+  </div>
+  <hr class="accent">
+
+  <div class="doc-title">Expired Permit Close-Out Proposal</div>
+  <div class="doc-sub">Two commercial properties &bull; SW 128 ST, Miami-Dade County</div>
+
+  <div class="meta-row">
+    <div class="cell">
+      <span class="label">Prepared For</span>
+      ______________________________
+    </div>
+    <div class="cell right">
+      <span class="label">Date</span>
+      June 17, 2026
+    </div>
+  </div>
+
+  <p>Thank you for the opportunity. Below is our flat-fee proposal to identify, reopen, and close out
+  every expired permit on record for your two properties on SW 128 ST. We handle the full process with the
+  county from start to finish, and you receive written confirmation as each permit is closed.</p>
+
+  <p>Across both properties there are <strong>11 expired permits</strong> that need to be resolved. The one
+  active permit currently in good standing is not part of this proposal.</p>
+
+  <!-- ===== Pricing ===== -->
+  <div class="section-heading">Pricing</div>
+  <div class="price-box">
+    <div class="price-line">
+      <span class="desc">Standard rate per expired permit</span>
+      <span class="amt strike">$1,250</span>
+    </div>
+    <div class="price-line">
+      <span class="desc">Your rate per expired permit (11-permit volume rate)</span>
+      <span class="amt">$975</span>
+    </div>
+    <div class="price-line">
+      <span class="desc">11 expired permits &times; $975</span>
+      <span class="amt">$10,725</span>
+    </div>
+    <div class="price-line total">
+      <span class="desc">Total professional service fee</span>
+      <span class="amt">$10,725</span>
+    </div>
+    <div class="save-note">You save $3,025 versus our standard per-permit rate of $1,250.</div>
+  </div>
+
+  <!-- ===== What's included per permit ===== -->
+  <div class="section-heading">What Is Included For Each Permit</div>
+  <p>Every one of these permits has to be worked individually. Many date back to the 1990s, and the county
+  cannot pull them by expiration date, so each one is chased by its application reference. For each permit
+  we:</p>
+  <ul class="work">
+    <li>Pull the full permit record and original application from Miami-Dade County archives. Older permits
+    are on microfilm and have to be requested and retrieved by hand.</li>
+    <li>Review the file to pinpoint exactly what is open or missing, such as a final inspection that was
+    never completed, an expired application, or a required revision.</li>
+    <li>Meet in person with the correct trade department for that permit (Building, Electrical, Mechanical,
+    or Public Works). Each trade is a separate department and a separate desk, so each permit can require
+    its own visit.</li>
+    <li>Confirm the exact close-out path with that department: renewal and inspection, a revision, a
+    recertification, or close-out by affidavit.</li>
+    <li>Prepare and submit everything that department requires to reopen and process the permit.</li>
+    <li>Schedule and meet the inspector for any required inspection.</li>
+    <li>Track the permit through to a final, closed status and confirm it is cleared in the county system.</li>
+    <li>Provide you written confirmation once the permit is officially closed.</li>
+  </ul>
+
+  <div class="note-box">
+    <strong>Government costs are separate.</strong> The fee above is for our professional service. County
+    renewal and re-permit fees, re-inspection fees, and any engineering letters or affidavits the county
+    requires to close a permit are billed separately at cost. We tell you each cost in advance before
+    anything is paid.
+  </div>
+
+  <div class="footer">
+    Insured &nbsp;·&nbsp; Miami-Dade Permit Specialists
+    <span class="url">www.permitsolutions.us</span>
+  </div>
+
+</div>
+
+<div class="page-break"></div>
+
+<!-- ===== PAGE 2: Permit schedule + sign-off ===== -->
+<div class="page">
+
+  <div class="header">
+    <div class="brand">
+      <div class="wordmark">Permit Solutions</div>
+      <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+    </div>
+    <div class="contact">
+      <span class="contact-line">305-600-9422</span>
+      <span class="contact-line">help@permitsolutions.us</span>
+      <span class="contact-line">www.permitsolutions.us</span>
+    </div>
+  </div>
+  <hr class="accent">
+
+  <div class="section-heading">Permits Covered By This Proposal</div>
+
+  <!-- Property 1 -->
+  <div class="prop-head">12176 SW 128 ST</div>
+  <div class="prop-sub">Folio 3059130110010 &bull; Owner of record: So-Jo &amp; Assoc Ltd &bull; 8 expired permits</div>
+  <table class="permits">
+    <thead>
+      <tr>
+        <th style="width: 16%;">Permit #</th>
+        <th>Work</th>
+        <th style="width: 14%;">Trade</th>
+        <th style="width: 14%;">Issued</th>
+        <th class="amt" style="width: 12%;">Fee</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="ref">C1998155371</td><td>A/C (unlimited) / sheet metal</td><td>Mechanical</td><td>Jul 20, 1998</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">C1993187054</td><td>Burglar alarm</td><td>Electrical</td><td>Mar 3, 1993</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">N1993165920</td><td>Electrical</td><td>Electrical</td><td>Feb 15, 1993</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">N1993066043</td><td>A/C (unlimited)</td><td>Mechanical</td><td>Nov 19, 1992</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">C1993026953</td><td>General building (county)</td><td>Building</td><td>Nov 3, 1992</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">C1993026978</td><td>General building (county)</td><td>Building</td><td>Nov 3, 1992</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">N1992091469</td><td>Burglar alarm</td><td>Electrical</td><td>May 20, 1992</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">S1991090694</td><td>Burglar alarm</td><td>Electrical</td><td>May 27, 1991</td><td class="amt">$975</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4">Subtotal &mdash; 8 permits</td><td class="amt">$7,800</td></tr>
+    </tfoot>
+  </table>
+
+  <!-- Property 2 -->
+  <div class="prop-head">11900 SW 128 ST</div>
+  <div class="prop-sub">Folio 3059130030320 &bull; Owner of record: Flyer Ventures Ltd Partnership &bull; 3 expired permits</div>
+  <table class="permits">
+    <thead>
+      <tr>
+        <th style="width: 16%;">Permit #</th>
+        <th>Work</th>
+        <th style="width: 14%;">Trade</th>
+        <th style="width: 14%;">Issued</th>
+        <th class="amt" style="width: 12%;">Fee</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="ref">C2023016780</td><td>General building (county)</td><td>Building</td><td>Jun 8, 2023</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">C1994016981</td><td>Fire alarm</td><td>Electrical</td><td>Oct 24, 1993</td><td class="amt">$975</td></tr>
+      <tr><td class="ref">C1993109466</td><td>Heating / mechanical ventilation</td><td>Mechanical</td><td>Dec 29, 1992</td><td class="amt">$975</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td colspan="4">Subtotal &mdash; 3 permits</td><td class="amt">$2,925</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="price-box" style="margin-top: 10pt;">
+    <div class="price-line total" style="border-top: 0; padding-top: 0; margin-top: 0;">
+      <span class="desc">Total &mdash; 11 permits</span>
+      <span class="amt">$10,725</span>
+    </div>
+  </div>
+
+  <p style="font-size: 8.5pt; color: #666; margin-top: 8pt;">Note: 11900 SW 128 ST also has one active permit
+  (C2025018474, fire alarm, issued 2025) that is currently in good standing. It is not expired and is not
+  part of this proposal.</p>
+
+  <hr class="sig-divider">
+  <div class="signoff">
+    <div class="closing">Prepared by,</div>
+    <div class="name">Victor L. Moreno</div>
+    <div class="title">Founder &amp; Compliance Consultant</div>
+  </div>
+
+  <div class="footer">
+    Insured &nbsp;·&nbsp; Miami-Dade Permit Specialists
+    <span class="url">www.permitsolutions.us</span>
+  </div>
+
+</div>
+
+</body>
+</html>
