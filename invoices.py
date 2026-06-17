@@ -42,6 +42,7 @@ from db import connect
 
 WORKFLOW_STATUSES: list[tuple[str, str]] = [
     ("intake",              "Intake"),
+    ("reviewing_documents", "Reviewing Documents"),
     ("awaiting_survey",     "Awaiting Survey"),
     ("awaiting_engineer",   "Awaiting Engineer"),
     ("permit_prep",         "Permit Prep"),
@@ -78,6 +79,7 @@ AUTO_TASK_PREFIX = "[auto] "
 # Per-status "stuck" thresholds — how many days before showing on stuck-list
 WORKFLOW_STUCK_THRESHOLDS_DAYS: dict[str, int] = {
     "intake":               3,
+    "reviewing_documents":  3,
     "awaiting_survey":      7,
     "awaiting_engineer":    10,
     "permit_prep":          5,
