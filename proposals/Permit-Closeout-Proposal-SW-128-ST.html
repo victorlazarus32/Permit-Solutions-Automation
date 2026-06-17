@@ -36,9 +36,12 @@
     display: table-cell; vertical-align: bottom; text-align: right; width: 32%;
     font-size: 8pt; line-height: 1.4; letter-spacing: 0.01em;
   }
-  .logo { height: 0.92in; width: auto; display: block; }
-  .wordmark { font-weight: 700; font-size: 15pt; letter-spacing: 0.12em; text-transform: uppercase; line-height: 1.1; white-space: nowrap; }
-  .tagline { margin-top: 6pt; font-size: 7.5pt; letter-spacing: 0.05em; white-space: nowrap; }
+  .lockup { display: table; }
+  .lockup .mark-cell { display: table-cell; vertical-align: middle; padding-right: 11pt; }
+  .lockup .text-cell { display: table-cell; vertical-align: middle; }
+  .logo { height: 0.46in; width: auto; display: block; }
+  .wordmark { font-weight: 700; font-size: 12pt; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.05; white-space: nowrap; color: #111; }
+  .tagline { margin-top: 4pt; font-size: 7pt; letter-spacing: 0.05em; white-space: nowrap; }
   .contact-line { display: block; }
   hr.accent { border: 0; border-top: 1.25pt solid #c2410c; margin: 8pt 0 11pt 0; }
 
@@ -128,8 +131,15 @@
   <!-- 1. Header / Branding -->
   <div class="header">
     <div class="brand">
-      <img class="logo" src="permit_solutions_logo.png" alt="Permit Solutions Services">
-      <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+      <div class="lockup">
+        <div class="mark-cell">
+          <img class="logo" src="ps-squared-mark.png" alt="PS² — Permit Solutions Services">
+        </div>
+        <div class="text-cell">
+          <div class="wordmark">Permit Solutions Services</div>
+          <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+        </div>
+      </div>
     </div>
     <div class="contact">
       <span class="contact-line">305-600-9422</span>
