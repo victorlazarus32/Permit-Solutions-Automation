@@ -1,3 +1,4 @@
+anthropic==0.109.2
 blinker==1.9.0
 click==8.3.3
 colorama==0.4.6

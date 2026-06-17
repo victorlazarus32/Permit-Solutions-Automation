@@ -10,7 +10,8 @@
       <h1>Invoices</h1>
       <p class="hero-sub">Bill clients, track outstanding balances, and record payments.</p>
     </div>
-    <div class="lead-hero-actions">
+    <div class="lead-hero-actions" style="display: flex; gap: 0.5rem;">
+      <a class="btn-secondary" href="{{ url_for('proposal_new') }}">+ New Proposal</a>
       <a class="btn-primary" href="{{ url_for('invoice_new') }}">+ New Invoice</a>
     </div>
   </div>

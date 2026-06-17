@@ -22,6 +22,9 @@
       {% if inv.is_overdue %}<span class="status status-overdue">OVERDUE</span>{% endif %}
       <a class="btn-secondary" href="{{ url_for('invoice_pdf', invoice_id=inv.id) }}" target="_blank">View PDF</a>
       <a class="btn-secondary" download href="{{ url_for('invoice_pdf', invoice_id=inv.id) }}">Download</a>
+      {% if inv.proposal_data %}
+      <a class="btn-secondary" download href="{{ url_for('invoice_proposal_pdf', invoice_id=inv.id) }}">Download proposal</a>
+      {% endif %}
     </div>
   </div>
 </section>

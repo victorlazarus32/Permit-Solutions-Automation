@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}New Proposal{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="lead-hero-row">
+    <div>
+      <p class="lead-breadcrumb"><a href="{{ url_for('invoices_list') }}">Invoices</a> · New Proposal</p>
+      <h1>New proposal</h1>
+      <p class="hero-sub">Fill it once, generate the branded proposal PDF and a linked invoice. Dictate or describe the job to auto-fill.</p>
+    </div>
+  </div>
+</section>
+
+<form method="POST" id="proposal-form" style="max-width: 1000px;">
+  <input type="hidden" name="proposal_json" id="proposal_json">
+
+  <!-- ===== Quick fill: dictate / describe ===== -->
+  <div class="lead-card" style="margin-bottom: 1rem;">
+    <h3 class="lead-card-title">Quick fill</h3>
+    <p style="color: var(--ink-mute); font-size: 0.88rem; margin-top: 0;">
+      Talk or paste a description of the job, then click <strong>Auto-fill</strong>. Example:
+      “So-Jo &amp; Assoc, 12176 SW 128 St, folio 3059130110010, 8 expired permits; Flyer Ventures, 11900 SW 128 St, 2 permits; $975 each, 50/50.”
+    </p>
+    <textarea id="ai_text" rows="3" placeholder="Describe the job…" style="width: 100%; font-size: 0.92rem;"></textarea>
+    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <button type="button" class="btn-secondary" id="mic_btn" title="Dictate">🎤 Dictate</button>
+      <button type="button" class="btn-primary" id="ai_btn">Auto-fill from description</button>
+      <span id="ai_status" style="font-size: 0.85rem; color: var(--ink-mute);"></span>
+    </div>
+  </div>
+
+  <!-- ===== Job-level fields ===== -->
+  <div class="lead-card" style="margin-bottom: 1rem;">
+    <h3 class="lead-card-title">Proposal details</h3>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="client_name">Client name (on invoice) <span style="color: var(--red);">*</span></label>
+        <input type="text" id="client_name" required>
+      </div>
+      <div class="form-field">
+        <label for="prepared_for">Prepared for (on proposal)</label>
+        <input type="text" id="prepared_for" placeholder="e.g. So-Jo &amp; Assoc Ltd • Flyer Ventures Ltd Partnership">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="subtitle">Subtitle</label>
+        <input type="text" id="subtitle" placeholder="e.g. Two commercial properties • SW 128 ST, Miami-Dade County">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field" style="max-width: 150px;">
+        <label for="fee_per_permit">Fee / permit ($)</label>
+        <input type="number" id="fee_per_permit" value="975" min="0" step="25">
+      </div>
+      <div class="form-field" style="max-width: 150px;">
+        <label for="standard_rate">Standard rate ($)</label>
+        <input type="number" id="standard_rate" value="1250" min="0" step="25">
+      </div>
+      <div class="form-field" style="max-width: 130px;">
+        <label for="deposit_pct">Deposit (%)</label>
+        <input type="number" id="deposit_pct" value="50" min="0" max="100" step="5">
+      </div>
+      <div class="form-field" style="max-width: 130px;">
+        <label for="validity_days">Valid (days)</label>
+        <input type="number" id="validity_days" value="15" min="1" step="1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label for="workflow_start">Start workflow at</label>
+        <select id="workflow_start">
+          <option value="reviewing_documents">Reviewing Documents (job already approved)</option>
+          <option value="intake">Intake</option>
+        </select>
+      </div>
+      {% if is_admin and all_users %}
+      <div class="form-field">
+        <label for="owner">Owner</label>
+        <select id="owner">
+          {% for u in all_users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="intro_extra">Intro note (optional)</label>
+        <input type="text" id="intro_extra" placeholder="e.g. The one active permit in good standing is not part of this agreement.">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label for="active_excluded">Active permit note (optional, small print under the table)</label>
+        <input type="text" id="active_excluded" placeholder="e.g. 11900 SW 128 ST also has one active permit (C2025018474)… not part of this proposal.">
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Properties ===== -->
+  <div class="lead-card" style="margin-bottom: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3 class="lead-card-title" style="margin: 0;">Properties &amp; permits</h3>
+      <button type="button" class="btn-secondary" id="add_prop">+ Add property</button>
+    </div>
+    <div id="props"></div>
+  </div>
+
+  <!-- ===== Totals + submit ===== -->
+  <div class="lead-card" style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div id="totals" style="font-size: 0.95rem;">
+      <strong id="t_count">0</strong> permits ·
+      Total <strong id="t_total">$0</strong> ·
+      Deposit <strong id="t_deposit">$0</strong>
+    </div>
+    <button type="submit" class="btn-primary" id="submit_btn">Generate proposal + invoice</button>
+  </div>
+</form>
+
+<template id="prop-template">
+  <div class="prop card" style="border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; margin-top: 0.75rem;">
+    <div class="form-row">
+      <div class="form-field"><label>Property address</label><input class="p-address" type="text"></div>
+      <div class="form-field" style="max-width: 200px;"><label>Folio</label><input class="p-folio" type="text"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><label>Owner of record</label><input class="p-owner" type="text"></div>
+      <div class="form-field" style="display: flex; align-items: flex-end;">
+        <button type="button" class="btn-link p-remove" style="color: var(--red);">Remove property</button>
+      </div>
+    </div>
+    <table class="permits-tbl" style="width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.4rem;">
+      <thead>
+        <tr style="text-align: left; color: var(--ink-mute); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;">
+          <th style="padding: 4px;">Permit #</th><th style="padding: 4px;">Work</th>
+          <th style="padding: 4px; width: 16%;">Trade</th><th style="padding: 4px; width: 16%;">Issued</th>
+          <th style="padding: 4px; width: 6%;">Mark</th><th></th>
+        </tr>
+      </thead>
+      <tbody class="permits-body"></tbody>
+    </table>
+    <div style="margin-top: 0.4rem; display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" class="btn-secondary btn-tiny p-add-permit">+ Add permit</button>
+      <label style="font-size: 0.8rem; color: var(--ink-mute);">Footnotes (one per line):</label>
+    </div>
+    <textarea class="p-footnotes" rows="2" style="width: 100%; font-size: 0.82rem; margin-top: 0.3rem;"
+      placeholder="e.g. † Permit S1991090694 (1991) predates Hurricane Andrew…"></textarea>
+  </div>
+</template>
+
+<template id="permit-row-template">
+  <tr class="permit-row">
+    <td style="padding: 3px;"><input class="r-ref" type="text" style="width: 100%;"></td>
+    <td style="padding: 3px;"><input class="r-work" type="text" style="width: 100%;"></td>
+    <td style="padding: 3px;"><input class="r-trade" type="text" list="trades_list" style="width: 100%;"></td>
+    <td style="padding: 3px;"><input class="r-issued" type="text" style="width: 100%;" placeholder="Jul 20, 1998"></td>
+    <td style="padding: 3px;"><input class="r-marker" type="text" style="width: 100%;" placeholder="†"></td>
+    <td style="padding: 3px;"><button type="button" class="btn-link r-remove" style="color: var(--red);">✕</button></td>
+  </tr>
+</template>
+
+<datalist id="trades_list">
+  <option value="Building"><option value="Electrical"><option value="Mechanical">
+  <option value="Public Works"><option value="Fire"><option value="Plumbing"><option value="Roofing">
+</datalist>
+
+<script>
+(function() {
+  const $ = (s, el) => (el || document).querySelector(s);
+  const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+  const props = $('#props');
+
+  function usd(v) {
+    v = Number(v) || 0;
+    return '$' + (Math.abs(v - Math.round(v)) < 0.005
+      ? v.toLocaleString('en-US', {maximumFractionDigits: 0})
+      : v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+  }
+
+  function addPermit(body, pm) {
+    pm = pm || {};
+    const row = $('#permit-row-template').content.firstElementChild.cloneNode(true);
+    $('.r-ref', row).value = pm.ref || '';
+    $('.r-work', row).value = pm.work || '';
+    $('.r-trade', row).value = pm.trade || '';
+    $('.r-issued', row).value = pm.issued || '';
+    $('.r-marker', row).value = pm.marker || '';
+    $('.r-remove', row).addEventListener('click', () => { row.remove(); recalc(); });
+    body.appendChild(row);
+    recalc();
+  }
+
+  function addProperty(p) {
+    p = p || {};
+    const block = $('#prop-template').content.firstElementChild.cloneNode(true);
+    $('.p-address', block).value = p.address || '';
+    $('.p-folio', block).value = p.folio || '';
+    $('.p-owner', block).value = p.owner || '';
+    $('.p-footnotes', block).value = (p.footnotes || []).join('\n');
+    const body = $('.permits-body', block);
+    $('.p-add-permit', block).addEventListener('click', () => addPermit(body));
+    $('.p-remove', block).addEventListener('click', () => { block.remove(); recalc(); });
+    props.appendChild(block);
+    (p.permits && p.permits.length ? p.permits : [{}]).forEach(pm => addPermit(body, pm));
+    recalc();
+  }
+
+  function recalc() {
+    const count = $$('.permit-row').length;
+    const fee = Number($('#fee_per_permit').value) || 0;
+    const dep = Number($('#deposit_pct').value) || 0;
+    const total = count * fee;
+    $('#t_count').textContent = count;
+    $('#t_total').textContent = usd(total);
+    $('#t_deposit').textContent = usd(total * dep / 100);
+  }
+
+  function buildModel() {
+    const properties = $$('.prop').map(block => ({
+      address: $('.p-address', block).value.trim(),
+      folio: $('.p-folio', block).value.trim(),
+      owner: $('.p-owner', block).value.trim(),
+      footnotes: $('.p-footnotes', block).value.split('\n').map(s => s.trim()).filter(Boolean),
+      permits: $$('.permit-row', block).map(r => ({
+        ref: $('.r-ref', r).value.trim(),
+        work: $('.r-work', r).value.trim(),
+        trade: $('.r-trade', r).value.trim(),
+        issued: $('.r-issued', r).value.trim(),
+        marker: $('.r-marker', r).value.trim(),
+      })).filter(pm => pm.ref || pm.work),
+    })).filter(p => p.permits.length);
+
+    return {
+      client_name: $('#client_name').value.trim(),
+      prepared_for: $('#prepared_for').value.trim(),
+      subtitle: $('#subtitle').value.trim(),
+      fee_per_permit: Number($('#fee_per_permit').value) || 0,
+      standard_rate: Number($('#standard_rate').value) || 0,
+      deposit_pct: Number($('#deposit_pct').value) || 0,
+      validity_days: Number($('#validity_days').value) || 15,
+      intro_extra: $('#intro_extra').value.trim(),
+      active_excluded: $('#active_excluded').value.trim(),
+      workflow_start: $('#workflow_start').value,
+      owner: ($('#owner') || {}).value || '',
+      properties: properties,
+    };
+  }
+
+  function loadModel(m) {
+    m = m || {};
+    const set = (id, v) => { const el = $('#' + id); if (el != null && v != null && v !== '') el.value = v; };
+    set('client_name', m.client_name || m.prepared_for);
+    set('prepared_for', m.prepared_for);
+    set('subtitle', m.subtitle);
+    set('fee_per_permit', m.fee_per_permit);
+    set('standard_rate', m.standard_rate);
+    set('deposit_pct', m.deposit_pct);
+    set('validity_days', m.validity_days);
+    set('intro_extra', m.intro_extra);
+    set('active_excluded', m.active_excluded);
+    props.innerHTML = '';
+    (m.properties && m.properties.length ? m.properties : [{}]).forEach(addProperty);
+    recalc();
+  }
+
+  // Wire job-field recalc
+  ['fee_per_permit', 'deposit_pct'].forEach(id => $('#' + id).addEventListener('input', recalc));
+  $('#add_prop').addEventListener('click', () => addProperty());
+  props.addEventListener('input', recalc);
+
+  // Submit -> serialize
+  $('#proposal-form').addEventListener('submit', (e) => {
+    const model = buildModel();
+    if (!model.client_name) { alert('Enter a client name.'); e.preventDefault(); return; }
+    if (!model.properties.length) { alert('Add at least one property with a permit.'); e.preventDefault(); return; }
+    $('#proposal_json').value = JSON.stringify(model);
+  });
+
+  // ===== Mic dictation (browser Web Speech API) =====
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micBtn = $('#mic_btn');
+  if (!SR) {
+    micBtn.disabled = true;
+    micBtn.title = 'Speech recognition not supported in this browser (use Chrome or Edge)';
+  } else {
+    let rec = null, listening = false;
+    micBtn.addEventListener('click', () => {
+      if (listening) { rec && rec.stop(); return; }
+      rec = new SR();
+      rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = true;
+      const base = $('#ai_text').value;
+      rec.onresult = (ev) => {
+        let txt = '';
+        for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+        $('#ai_text').value = (base ? base + ' ' : '') + txt;
+      };
+      rec.onend = () => { listening = false; micBtn.textContent = '🎤 Dictate'; };
+      rec.onerror = () => { listening = false; micBtn.textContent = '🎤 Dictate'; };
+      rec.start(); listening = true; micBtn.textContent = '⏹ Stop';
+    });
+  }
+
+  // ===== AI auto-fill =====
+  $('#ai_btn').addEventListener('click', async () => {
+    const text = $('#ai_text').value.trim();
+    const status = $('#ai_status');
+    if (!text) { status.textContent = 'Type or dictate a description first.'; return; }
+    status.textContent = 'Reading…';
+    try {
+      const r = await fetch('{{ url_for("api_proposal_parse") }}', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text}),
+      });
+      if (r.status === 501) { status.textContent = 'AI auto-fill is not configured yet (needs the Claude API key).'; return; }
+      if (!r.ok) { status.textContent = 'Could not parse that. Fill the fields manually.'; return; }
+      const data = await r.json();
+      loadModel(data);
+      status.textContent = 'Filled in — review and adjust before generating.';
+    } catch (e) {
+      status.textContent = 'Network error. Fill the fields manually.';
+    }
+  });
+
+  // Start with one empty property
+  addProperty();
+})();
+</script>
+{% endblock %}

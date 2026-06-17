@@ -807,6 +807,29 @@ def transition_workflow(invoice_id: int, *, to_status: str,
     return get_invoice(invoice_id)
 
 
+def set_proposal_data(invoice_id: int, data: dict) -> None:
+    """Persist the structured proposal/agreement inputs as JSON on the invoice."""
+    with connect() as conn:
+        conn.execute(
+            "UPDATE invoices SET proposal_data = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(data), _now(), invoice_id),
+        )
+
+
+def get_proposal_data(invoice_id: int) -> dict | None:
+    """Return the stored proposal_data dict, or None if the invoice has none."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT proposal_data FROM invoices WHERE id = ?", (invoice_id,)
+        ).fetchone()
+    if not row or not row[0]:
+        return None
+    try:
+        return json.loads(row[0])
+    except (ValueError, TypeError):
+        return None
+
+
 def list_workflow_history(invoice_id: int) -> list[dict]:
     with connect() as conn:
         rows = conn.execute(

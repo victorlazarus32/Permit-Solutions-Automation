@@ -1,0 +1,386 @@
+<!--
+  Permit Solutions Services — Proposal + Service Agreement (data-driven).
+
+  Rendered server-side by app/server.py:_render_proposal_pdf() from a
+  structured `proposal_data` dict stored on the invoice. The locked design
+  (PS² letterhead, two-column pricing/terms, keep-together tables, signature
+  block) lives here; only the client/property/permit/fee data changes.
+
+  Money values arrive pre-formatted as *_display strings. Logo arrives as an
+  absolute file URI in `logo_src` so it resolves from the OS temp dir.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Permit Solutions Services — Proposal and Service Agreement</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  @page { size: letter; margin: 0.55in 0.7in; }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 9.5pt; line-height: 1.42; color: #000; font-weight: 400;
+  }
+
+  .header { display: table; width: 100%; }
+  .header .brand { display: table-cell; vertical-align: top; text-align: left; width: 68%; padding-right: 16pt; }
+  .header .contact {
+    display: table-cell; vertical-align: bottom; text-align: right; width: 32%;
+    font-size: 8pt; line-height: 1.4; letter-spacing: 0.01em;
+  }
+  .lockup { display: table; }
+  .lockup .mark-cell { display: table-cell; vertical-align: middle; padding-right: 11pt; }
+  .lockup .text-cell { display: table-cell; vertical-align: middle; }
+  .logo { height: 0.46in; width: auto; display: block; }
+  .wordmark { font-weight: 700; font-size: 12pt; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.05; white-space: nowrap; color: #111; }
+  .tagline { margin-top: 4pt; font-size: 7pt; letter-spacing: 0.05em; white-space: nowrap; }
+  .contact-line { display: block; }
+  hr.accent { border: 0; border-top: 1.25pt solid #c2410c; margin: 8pt 0 11pt 0; }
+
+  .doc-title { font-size: 13pt; font-weight: 700; letter-spacing: 0.01em; margin: 0 0 1pt 0; }
+  .doc-sub { font-size: 8.5pt; color: #444; margin-bottom: 11pt; }
+
+  .meta-row { display: table; width: 100%; margin: 0 0 11pt 0; font-size: 9pt; }
+  .meta-row .cell { display: table-cell; vertical-align: top; width: 50%; }
+  .meta-row .cell.right { text-align: right; }
+  .meta-row .label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 7pt; color: #777; display: block; margin-bottom: 2pt; }
+
+  p { margin: 0 0 6pt 0; }
+  p.lead { margin-bottom: 9pt; }
+
+  .section-heading {
+    font-size: 8pt; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #111; margin: 13pt 0 5pt 0; padding-bottom: 3pt; border-bottom: 0.4pt solid #ddd;
+    page-break-after: avoid;
+  }
+
+  .clause { page-break-inside: avoid; }
+  .clause p:last-child { margin-bottom: 0; }
+
+  .price-box { border: 1pt solid #000; border-radius: 4pt; padding: 9pt 12pt; page-break-inside: avoid; }
+  .price-line { display: table; width: 100%; font-size: 9pt; margin-bottom: 3pt; }
+  .price-line:last-child { margin-bottom: 0; }
+  .price-line .desc { display: table-cell; text-align: left; }
+  .price-line .amt { display: table-cell; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .price-line.total { font-weight: 700; font-size: 11.5pt; border-top: 0.6pt solid #000; padding-top: 6pt; margin-top: 6pt; }
+  .price-line.total .amt { color: #c2410c; }
+  .box-note { font-size: 8pt; color: #555; margin-top: 6pt; }
+
+  .cols { display: table; width: 100%; border-spacing: 0; }
+  .col { display: table-cell; vertical-align: top; width: 50%; }
+  .col.left { padding-right: 9pt; }
+  .col.right { padding-left: 9pt; }
+
+  ul.work, ul.excl { margin: 0; padding-left: 14pt; }
+  ul.work li { margin-bottom: 3pt; }
+  ul.excl { columns: 2; column-gap: 20pt; }
+  ul.excl li { margin-bottom: 2pt; }
+
+  .prop-block { page-break-inside: avoid; margin-bottom: 8pt; }
+  .prop-head { font-size: 9.5pt; font-weight: 600; margin: 0 0 1pt 0; }
+  .prop-sub { font-size: 7.5pt; color: #777; letter-spacing: 0.02em; margin-bottom: 4pt; }
+  table.permits { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
+  table.permits th {
+    text-align: left; padding: 3pt 6pt; font-size: 6.8pt; letter-spacing: 0.09em;
+    text-transform: uppercase; color: #777; border-bottom: 0.6pt solid #000;
+  }
+  table.permits th.amt, table.permits td.amt { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.permits td { padding: 3pt 6pt; border-bottom: 0.4pt solid #e4e4e4; vertical-align: top; }
+  table.permits .ref { font-family: "SFMono-Regular", Consolas, monospace; font-size: 8pt; white-space: nowrap; }
+  table.permits tfoot td { font-weight: 600; border-top: 0.6pt solid #000; border-bottom: 0; padding-top: 4pt; }
+  .footnote { font-size: 7.5pt; color: #777; line-height: 1.35; margin-top: 5pt; }
+
+  .grand {
+    display: table; width: 100%; margin-top: 8pt; padding: 7pt 12pt;
+    border: 1pt solid #000; border-radius: 4pt; font-weight: 700; font-size: 11pt; page-break-inside: avoid;
+  }
+  .grand .desc { display: table-cell; text-align: left; }
+  .grand .amt { display: table-cell; text-align: right; color: #c2410c; font-variant-numeric: tabular-nums; }
+
+  .fine { font-size: 7.8pt; color: #777; margin-top: 7pt; }
+
+  .sig-block { page-break-inside: avoid; margin-top: 8pt; }
+  .accepted { font-weight: 600; font-size: 9pt; margin: 10pt 0 2pt 0; }
+  .sig-field { display: table; width: 100%; margin-top: 15pt; font-size: 9pt; }
+  .sig-field .lbl { display: table-cell; white-space: nowrap; padding-right: 8pt; vertical-align: bottom; }
+  .sig-field .ln  { display: table-cell; width: 100%; border-bottom: 0.6pt solid #000; }
+
+  .footer {
+    text-align: center; font-size: 7pt; letter-spacing: 0.1em; color: #000;
+    margin-top: 16pt; padding-top: 6pt; border-top: 0.4pt solid #000; text-transform: uppercase;
+  }
+  .footer .url { display: block; margin-top: 2pt; letter-spacing: 0.03em; text-transform: none; }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="brand">
+      <div class="lockup">
+        <div class="mark-cell">
+          <img class="logo" src="{{ logo_src }}" alt="PS² — Permit Solutions Services">
+        </div>
+        <div class="text-cell">
+          <div class="wordmark">Permit Solutions Services</div>
+          <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+        </div>
+      </div>
+    </div>
+    <div class="contact">
+      <span class="contact-line">305-600-9422</span>
+      <span class="contact-line">help@permitsolutions.us</span>
+      <span class="contact-line">www.permitsolutions.us</span>
+    </div>
+  </div>
+  <hr class="accent">
+
+  <div class="doc-title">Expired Permit Close-Out Proposal and Service Agreement</div>
+  {% if subtitle %}<div class="doc-sub">{{ subtitle }}</div>{% endif %}
+
+  <div class="meta-row">
+    <div class="cell">
+      <span class="label">Prepared For</span>
+      {{ prepared_for }}
+    </div>
+    <div class="cell right">
+      <span class="label">Date</span>
+      {{ date_display }}
+    </div>
+  </div>
+
+  <p class="lead">Thank you for the opportunity. This agreement sets out our flat-fee services to identify,
+  reopen, and close out the expired permits listed below for the {{ 'properties' if properties|length > 1 else 'property' }}
+  shown. We handle the entire process with the county from start to finish, and you receive written
+  confirmation as each permit is closed. {% if permit_count %}In total there {{ 'is' if permit_count == 1 else 'are' }}
+  <strong>{{ permit_count }} expired permit{{ '' if permit_count == 1 else 's' }}</strong> to resolve.{% endif %}
+  {% if intro_extra %}{{ intro_extra }}{% endif %}</p>
+
+  <div class="cols">
+    <div class="col left">
+      <div class="section-heading" style="margin-top: 4pt;">Pricing</div>
+      <div class="price-box">
+        <div class="price-line">
+          <span class="desc">Standard rate per expired permit</span>
+          <span class="amt">{{ standard_rate_display }}</span>
+        </div>
+        <div class="price-line">
+          <span class="desc">Your rate per permit (volume)</span>
+          <span class="amt">{{ fee_display }}</span>
+        </div>
+        <div class="price-line">
+          <span class="desc">{{ permit_count }} expired permit{{ '' if permit_count == 1 else 's' }} &times; {{ fee_display }}</span>
+          <span class="amt">{{ total_display }}</span>
+        </div>
+        <div class="price-line total">
+          <span class="desc">Total service fee</span>
+          <span class="amt">{{ total_display }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="col right">
+      <div class="section-heading" style="margin-top: 4pt;">Payment Terms</div>
+      <div class="price-box">
+        <div class="price-line">
+          <span class="desc">Deposit to begin ({{ deposit_pct }}%)</span>
+          <span class="amt">{{ deposit_display }}</span>
+        </div>
+        <div class="price-line">
+          <span class="desc">Balance on completion ({{ 100 - deposit_pct }}%)</span>
+          <span class="amt">{{ balance_display }}</span>
+        </div>
+        <div class="box-note"><strong>Balance Due.</strong> The remaining balance is due upon written
+        confirmation that all expired permits listed in this Agreement have been closed, administratively
+        cleared, or otherwise resolved with Miami-Dade County.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="clause">
+    <div class="section-heading">Payment Methods</div>
+    <p>Permit Solutions Services accepts payment by company check, Zelle, and credit card. Payments made by
+    credit card will include a 1.5% credit card processing surcharge. This surcharge applies only to credit
+    card payments and does not apply to payments made by check or Zelle. Client agrees that all payment
+    obligations under this proposal remain due regardless of the payment method selected.</p>
+  </div>
+
+  <div class="clause">
+    <div class="section-heading">County, Municipality, and Third-Party Costs</div>
+    <p>The service fee stated in this proposal is for Permit Solutions Services' professional services only.
+    County renewal fees, re-permit fees, re-inspection fees, recording fees, administrative fees, engineering
+    letters, affidavits, as-built drawings, notary fees, courier fees, or any other county, municipality, or
+    third-party costs are not included in the service fee. These costs will be billed separately at cost or
+    paid directly by Client. Permit Solutions Services will notify Client before any separate cost is
+    incurred.</p>
+  </div>
+
+  <div class="section-heading">What Is Included For Each Permit</div>
+  <p>Each permit is worked individually. The county cannot pull older permits by expiration date, so every one
+  is chased by its application reference. For each permit we:</p>
+  <ul class="work">
+    <li>Pull the full permit record and original application from Miami-Dade County archives, including the
+    older files held on microfilm that must be requested and retrieved by hand.</li>
+    <li>Review the file to pinpoint exactly what is open or missing, such as a final inspection that was never
+    completed, an expired application, or a required revision.</li>
+    <li>Meet in person with the correct trade department (Building, Electrical, or Mechanical). Each trade is a
+    separate department and desk, so a single property can require several visits.</li>
+    <li>Confirm the close-out path with that department: renewal and inspection, a revision, a recertification,
+    or close-out by affidavit, then prepare and submit everything they require.</li>
+    <li>Schedule and meet the inspector for any required inspection.</li>
+    <li>Track each permit to a final, closed status, confirm it is cleared in the county system, and provide
+    you written confirmation.</li>
+  </ul>
+
+  <div class="section-heading">Scope Limitations and Unknown Conditions</div>
+  <p>This proposal is based on the permit information currently available for the {{ 'properties' if properties|length > 1 else 'property' }}
+  listed above. Additional county requirements may be discovered only after the original permit records are
+  pulled and reviewed.</p>
+  <p>If Miami-Dade County determines that additional work is required beyond administrative close-out, permit
+  renewal, inspection coordination, or standard close-out processing, that work is outside the flat fee and
+  will require separate written approval from Client. Examples of excluded work include, but are not limited
+  to:</p>
+  <ul class="excl">
+    <li>Engineering reports</li>
+    <li>Affidavits</li>
+    <li>As-built drawings</li>
+    <li>New plans or revisions</li>
+    <li>Contractor repair work</li>
+    <li>Replacement work</li>
+    <li>Electrical, mechanical, building, or fire alarm corrections</li>
+    <li>Unsafe structure issues</li>
+    <li>New permits</li>
+    <li>Work required because of inspection failure</li>
+    <li>Work required because the original permitted condition no longer exists</li>
+  </ul>
+  <p style="margin-top: 6pt;"><strong>Licensed Trade Work Not Included.</strong> Permit Solutions Services does
+  not perform licensed electrical, mechanical, fire alarm, building, or repair work under this Agreement. If
+  any licensed trade work is required, Client must hire the appropriate licensed contractor under a separate
+  agreement.</p>
+
+  <div class="clause">
+    <div class="section-heading">No Guarantee of County Action</div>
+    <p>Permit Solutions Services will use commercially reasonable efforts to pursue closure of the permits
+    listed in this proposal. Final approval, inspection results, administrative closure, permit renewal, and
+    close-out decisions are made solely by Miami-Dade County and/or the applicable reviewing department.
+    Permit Solutions Services cannot guarantee a specific approval date, inspection result, processing time, or
+    county determination.</p>
+  </div>
+
+  <div class="clause">
+    <div class="section-heading">Client Responsibilities</div>
+    <p>Client agrees to provide timely signatures, owner authorization forms, corporate authorization documents
+    if requested, access to the property if inspections are required, and payment of county, municipality, or
+    third-party costs needed to move the file forward. Delays caused by missing signatures, lack of property
+    access, unpaid county fees, delayed client responses, or missing documentation may extend the completion
+    timeline.</p>
+  </div>
+
+  <div class="clause">
+    <div class="section-heading">Authorization to Communicate with Miami-Dade County</div>
+    <p>Client authorizes Permit Solutions Services and Victor L. Moreno to communicate with Miami-Dade County
+    departments, request permit records, retrieve archived files, submit close-out documentation, schedule
+    inspections, and coordinate with county personnel regarding the permits listed in this proposal. Client
+    agrees to sign any county-required authorization form if requested.</p>
+  </div>
+
+  <div class="section-heading">Permits Covered By This Proposal</div>
+
+  {% for prop in properties %}
+  <div class="prop-block">
+    <div class="prop-head">{{ prop.address }}</div>
+    <div class="prop-sub">
+      {% if prop.folio %}Folio {{ prop.folio }} &bull; {% endif %}
+      {% if prop.owner %}Owner of record: {{ prop.owner }} &bull; {% endif %}
+      {{ prop.permits|length }} expired permit{{ '' if prop.permits|length == 1 else 's' }}
+    </div>
+    <table class="permits">
+      <thead>
+        <tr>
+          <th style="width: 15%;">Permit #</th>
+          <th>Work</th>
+          <th style="width: 13%;">Trade</th>
+          <th style="width: 14%;">Issued</th>
+          <th class="amt" style="width: 11%;">Fee</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pm in prop.permits %}
+        <tr>
+          <td class="ref">{{ pm.ref }}{% if pm.marker %} {{ pm.marker }}{% endif %}</td>
+          <td>{{ pm.work }}</td>
+          <td>{{ pm.trade }}</td>
+          <td>{{ pm.issued }}</td>
+          <td class="amt">{{ fee_display }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="4">Subtotal &mdash; {{ prop.permits|length }} permit{{ '' if prop.permits|length == 1 else 's' }}</td><td class="amt">{{ prop.subtotal_display }}</td></tr>
+      </tfoot>
+    </table>
+    {% for fn in prop.footnotes %}
+    <div class="footnote">{{ fn }}</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div class="grand">
+    <span class="desc">Total &mdash; {{ permit_count }} permit{{ '' if permit_count == 1 else 's' }}</span>
+    <span class="amt">{{ total_display }}</span>
+  </div>
+
+  {% if active_excluded %}
+  <p class="fine">{{ active_excluded }}</p>
+  {% endif %}
+
+  {% if active_excluded_clause %}
+  <div class="clause">
+    <div class="section-heading">Active Permit Excluded</div>
+    <p>{{ active_excluded_clause }}</p>
+  </div>
+  {% endif %}
+
+  <div class="clause">
+    <div class="section-heading">Cancellation and Deposit</div>
+    <p>The initial deposit is earned as work begins and is applied toward file research, county record
+    retrieval, archived file requests, administrative review, communication with county departments, and
+    project setup. If Client cancels after work has begun, Permit Solutions Services may retain the portion of
+    the deposit corresponding to work performed, time incurred, and costs committed. Any unused portion, if
+    applicable, will be refunded or credited at Permit Solutions Services' discretion.</p>
+  </div>
+
+  <div class="clause">
+    <div class="section-heading">Proposal Validity</div>
+    <p>This proposal is valid for {{ validity_days }} days from the date shown above. After that date, pricing
+    and scope may be updated if county requirements, permit conditions, property records, or administrative
+    procedures change.</p>
+  </div>
+
+  <div class="sig-block">
+    <div class="section-heading">Acceptance of Proposal</div>
+    <p>By signing below, Client authorizes Permit Solutions Services to begin work on the expired permit
+    close-out services described in this proposal and agrees to the pricing, payment terms, exclusions,
+    limitations, and conditions stated herein.</p>
+
+    <div class="accepted">Accepted and agreed:</div>
+
+    <div class="sig-field"><span class="lbl">Client / Authorized Representative:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Name:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Title:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Company:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Date:</span><span class="ln"></span></div>
+
+    <div class="sig-field"><span class="lbl">Permit Solutions Services &mdash; Victor L. Moreno:</span><span class="ln"></span></div>
+    <div class="sig-field"><span class="lbl">Date:</span><span class="ln"></span></div>
+  </div>
+
+  <div class="footer">
+    Miami-Dade Permit Specialists
+    <span class="url">www.permitsolutions.us</span>
+  </div>
+
+</body>
+</html>

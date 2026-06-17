@@ -1441,6 +1441,118 @@ def _render_invoice_pdf(inv: dict) -> bytes:
     return pdf_bytes
 
 
+def _usd(v) -> str:
+    """Format a dollar amount: no cents when whole, two decimals otherwise."""
+    v = float(v or 0)
+    return f"${v:,.0f}" if abs(v - round(v)) < 0.005 else f"${v:,.2f}"
+
+
+def _build_proposal_context(data: dict) -> dict:
+    """Compute display strings + totals from a structured proposal_data dict.
+
+    The dict shape (also what we persist on invoices.proposal_data):
+        {
+          "prepared_for": str, "subtitle": str, "intro_extra": str,
+          "date_display": str|None,
+          "standard_rate": num, "fee_per_permit": num, "deposit_pct": int,
+          "validity_days": int,
+          "active_excluded": str, "active_excluded_clause": str,
+          "properties": [
+            {"address": str, "folio": str, "owner": str,
+             "footnotes": [str, ...],
+             "permits": [{"ref": str, "work": str, "trade": str,
+                          "issued": str, "marker": str}, ...]}
+          ]
+        }
+    Returns the Jinja context, plus private _total/_deposit/_balance numbers
+    the invoice side uses."""
+    fee = float(data.get("fee_per_permit") or 0)
+    standard_rate = float(data.get("standard_rate") or 1250)
+    deposit_pct = int(data.get("deposit_pct") or 50)
+
+    properties = []
+    permit_count = 0
+    for p in (data.get("properties") or []):
+        permits = p.get("permits") or []
+        permit_count += len(permits)
+        properties.append({
+            "address": p.get("address") or "",
+            "folio": p.get("folio") or "",
+            "owner": p.get("owner") or "",
+            "permits": permits,
+            "subtotal_display": _usd(len(permits) * fee),
+            "footnotes": p.get("footnotes") or [],
+        })
+
+    total = permit_count * fee
+    deposit = round(total * deposit_pct / 100.0, 2)
+    balance = round(total - deposit, 2)
+
+    date_display = data.get("date_display")
+    if not date_display:
+        d = dt.date.today()
+        date_display = f"{d.strftime('%B')} {d.day}, {d.year}"
+
+    return {
+        "logo_src": (PROJECT_ROOT / "logos" / "ps-squared-mark-800.png").as_uri(),
+        "subtitle": data.get("subtitle") or "",
+        "prepared_for": data.get("prepared_for") or "",
+        "date_display": date_display,
+        "intro_extra": data.get("intro_extra") or "",
+        "standard_rate_display": _usd(standard_rate),
+        "fee_display": _usd(fee),
+        "total_display": _usd(total),
+        "deposit_display": _usd(deposit),
+        "balance_display": _usd(balance),
+        "deposit_pct": deposit_pct,
+        "permit_count": permit_count,
+        "properties": properties,
+        "active_excluded": data.get("active_excluded") or "",
+        "active_excluded_clause": data.get("active_excluded_clause") or "",
+        "validity_days": int(data.get("validity_days") or 15),
+        "_total": total,
+        "_deposit": deposit,
+        "_balance": balance,
+    }
+
+
+def _render_proposal_pdf(data: dict) -> bytes:
+    """Render a structured proposal_data dict to the branded PDF via Chromium."""
+    from playwright.sync_api import sync_playwright
+    import tempfile
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    env = Environment(
+        loader=FileSystemLoader(str(PROJECT_ROOT / "templates")),
+        autoescape=select_autoescape(["html"]),
+    )
+    tmpl = env.get_template("proposal_agreement.html")
+    html = tmpl.render(**_build_proposal_context(data))
+
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as f:
+        f.write(html)
+        html_path = Path(f.name)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context()
+            page = ctx.new_page()
+            page.goto(html_path.as_uri(), wait_until="networkidle")
+            pdf_bytes = page.pdf(
+                format="Letter",
+                margin={"top": "0in", "bottom": "0in", "left": "0in", "right": "0in"},
+                print_background=True,
+                prefer_css_page_size=True,
+            )
+            browser.close()
+    finally:
+        try:
+            html_path.unlink()
+        except OSError:
+            pass
+    return pdf_bytes
+
+
 @app.route("/invoices")
 def invoices_list():
     status = (request.args.get("status") or "").strip() or None
@@ -1693,6 +1805,229 @@ def invoice_pdf(invoice_id: int):
         as_attachment=False,
         download_name=f"{inv['invoice_number']}.pdf",
     )
+
+
+def _proposal_scope_text(ctx: dict, data: dict) -> str:
+    """Plain-English scope summary stored on the invoice from the proposal."""
+    n = ctx["permit_count"]
+    addrs = ", ".join(p["address"] for p in ctx["properties"] if p["address"])
+    parts = [
+        f"Identify, reopen, and close out {n} expired permit{'' if n == 1 else 's'}"
+        + (f" at {addrs}" if addrs else "") + " with Miami-Dade County.",
+        "Pull county and microfilm records, coordinate in person with the relevant trade departments, "
+        "schedule required inspections, and track each permit to closed status with written confirmation.",
+        "Excludes county and third-party fees and any licensed trade work.",
+    ]
+    if data.get("active_excluded"):
+        parts.append(str(data["active_excluded"]))
+    return " ".join(parts)
+
+
+@app.route("/proposals/new", methods=["GET", "POST"])
+def proposal_new():
+    """Generator: one form -> a branded proposal PDF + a linked invoice."""
+    if request.method == "POST":
+        raw = request.form.get("proposal_json") or ""
+        try:
+            data = json.loads(raw)
+        except (ValueError, TypeError):
+            flash("Could not read the proposal data. Please try again.", "error")
+            return redirect(request.url)
+
+        client_name = (data.get("client_name") or data.get("prepared_for") or "").strip()
+        if not client_name:
+            flash("Enter a client name before generating.", "error")
+            return redirect(request.url)
+
+        ctx = _build_proposal_context(data)
+        permit_count = ctx["permit_count"]
+        fee = float(data.get("fee_per_permit") or 0)
+        if permit_count == 0 or fee <= 0:
+            flash("Add at least one permit and a fee per permit.", "error")
+            return redirect(request.url)
+
+        props = data.get("properties") or []
+        first_addr = (props[0].get("address") if props else None) or None
+
+        if is_admin():
+            chosen_owner = (data.get("owner") or "").strip().lower() or current_user()
+            if chosen_owner not in _load_users():
+                chosen_owner = current_user()
+        else:
+            chosen_owner = current_user()
+
+        line_items = [{
+            "description": (
+                f"Expired permit close-out, Miami-Dade County — {permit_count} expired "
+                f"permit{'' if permit_count == 1 else 's'}"
+                + (f" at {first_addr}" if first_addr else "")
+            ),
+            "quantity": permit_count,
+            "unit_price": fee,
+        }]
+
+        try:
+            inv = inv_mod.create_invoice(
+                client_name=client_name,
+                property_address=first_addr,
+                line_items=line_items,
+                deposit_amount=ctx["_deposit"],
+                scope_of_services=_proposal_scope_text(ctx, data),
+                terms=(
+                    f"{ctx['deposit_pct']}% deposit to begin. Balance due upon closure of all "
+                    f"expired permits with Miami-Dade County."
+                ),
+                owner=chosen_owner,
+            )
+        except ValueError as e:
+            flash(f"Could not create invoice: {e}", "error")
+            return redirect(request.url)
+
+        inv_mod.set_proposal_data(inv["id"], data)
+
+        if (data.get("workflow_start") or "").strip() == "reviewing_documents":
+            try:
+                inv_mod.transition_workflow(
+                    inv["id"], to_status="reviewing_documents",
+                    by=current_user(), note="Created from proposal generator",
+                )
+            except Exception:
+                log.exception("workflow transition failed")
+
+        flash(
+            f"Created {inv['invoice_number']} and saved the proposal. "
+            f"Use “Download proposal” on this page to get the PDF.",
+            "success",
+        )
+        return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
+
+    return render_template(
+        "proposal_form.html",
+        today_iso=dt.date.today().isoformat(),
+        all_users=sorted(_load_users().keys()) if is_admin() else [],
+        is_admin=is_admin(),
+    )
+
+
+@app.route("/invoices/<int:invoice_id>/proposal.pdf")
+def invoice_proposal_pdf(invoice_id: int):
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
+    data = inv_mod.get_proposal_data(invoice_id)
+    if not data:
+        flash("This invoice has no saved proposal to download.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    import io
+    try:
+        pdf_bytes = _render_proposal_pdf(data)
+    except Exception as e:
+        log.exception("Proposal PDF render failed")
+        flash(f"Could not render proposal PDF: {e}", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"{inv['invoice_number']}-proposal.pdf",
+    )
+
+
+_PROPOSAL_PARSE_TOOL = {
+    "name": "fill_proposal",
+    "description": "Structured fields for a Miami-Dade expired-permit close-out proposal.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "client_name": {"type": "string", "description": "Client/company name for the invoice."},
+            "prepared_for": {"type": "string", "description": "Owner name(s) shown on the proposal."},
+            "subtitle": {"type": "string"},
+            "fee_per_permit": {"type": "number", "description": "Default 975 if not stated."},
+            "standard_rate": {"type": "number", "description": "Default 1250 if not stated."},
+            "deposit_pct": {"type": "number", "description": "Default 50 if not stated."},
+            "validity_days": {"type": "number", "description": "Default 15 if not stated."},
+            "intro_extra": {"type": "string"},
+            "active_excluded": {"type": "string"},
+            "properties": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "address": {"type": "string"},
+                        "folio": {"type": "string"},
+                        "owner": {"type": "string"},
+                        "footnotes": {"type": "array", "items": {"type": "string"}},
+                        "permits": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "ref": {"type": "string"},
+                                    "work": {"type": "string"},
+                                    "trade": {"type": "string"},
+                                    "issued": {"type": "string"},
+                                    "marker": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "required": ["properties"],
+    },
+}
+
+
+@app.post("/api/proposal-parse")
+def api_proposal_parse():
+    """Parse a free-text/dictated job description into proposal fields via Claude.
+
+    Returns 501 (with a friendly message) when ANTHROPIC_API_KEY is unset or the
+    anthropic SDK is not installed, so the generator form still works manually."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return jsonify({"error": "AI auto-fill is not configured (set ANTHROPIC_API_KEY)."}), 501
+    try:
+        import anthropic  # lazy: only needed when the key is present
+    except ImportError:
+        return jsonify({"error": "AI auto-fill is not installed (add the anthropic package)."}), 501
+
+    text = (request.get_json(silent=True) or {}).get("text", "").strip()
+    if not text:
+        return jsonify({"error": "No description provided."}), 400
+
+    system = (
+        "You extract a Miami-Dade County expired-permit close-out proposal from the user's "
+        "description and call the fill_proposal tool. Defaults when unstated: fee_per_permit 975, "
+        "standard_rate 1250, deposit_pct 50, validity_days 15. Never invent permit numbers. If the "
+        "user only gives a count for a property (e.g. '8 expired permits'), create that many permit "
+        "rows with blank ref/work for the user to complete. Map trades to Building, Electrical, "
+        "Mechanical, Public Works, Fire, Plumbing, or Roofing when possible."
+    )
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            system=system,
+            tools=[_PROPOSAL_PARSE_TOOL],
+            tool_choice={"type": "tool", "name": "fill_proposal"},
+            messages=[{"role": "user", "content": text}],
+        )
+    except Exception as e:
+        log.exception("proposal parse failed")
+        return jsonify({"error": f"Could not parse: {e}"}), 502
+
+    for block in msg.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "fill_proposal":
+            return jsonify(block.input)
+    return jsonify({"error": "No structured result."}), 502
 
 
 @app.post("/invoices/<int:invoice_id>/mark-sent")
