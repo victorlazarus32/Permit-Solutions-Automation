@@ -75,7 +75,7 @@
 <h2 class="section-heading">Jobs Pipeline · <span style="color: var(--ink-mute); font-weight: 400; font-size: 0.85em;">{{ pipeline_total }} total</span></h2>
 <section class="pipeline-flow">
   <div class="pf-track">
-    {% set forward = ['intake','reviewing_documents','awaiting_survey','awaiting_engineer','permit_prep','submitted','review_comments','awaiting_inspection','approved'] %}
+    {% set forward = ['intake','reviewing_documents','meet_building_reviewers','awaiting_survey','awaiting_engineer','permit_prep','submitted','review_comments','awaiting_inspection','approved'] %}
     {% set terminal = ['inspection_failed','closed_won','closed_lost'] %}
 
     {% for key in forward %}
@@ -191,6 +191,7 @@
   /* Stage-specific accent borders along the bottom */
   .pf-stage-intake              { border-bottom: 3px solid #6366f1; }
   .pf-stage-reviewing_documents { border-bottom: 3px solid #14b8a6; }
+  .pf-stage-meet_building_reviewers { border-bottom: 3px solid #a21caf; }
   .pf-stage-awaiting_survey,
   .pf-stage-awaiting_engineer   { border-bottom: 3px solid #d97706; }
   .pf-stage-permit_prep         { border-bottom: 3px solid #0ea5e9; }
