@@ -467,6 +467,27 @@
     </div>
     {% endif %}
 
+    {% if inv.status in ('partial', 'paid') %}
+    <div class="lead-card">
+      <h3 class="lead-card-title">Correct Payments</h3>
+      <p class="lead-card-desc">Recorded too much, or by mistake? Set the correct total received to date.
+        Currently recorded: <strong>${{ '{:,.2f}'.format(inv.amount_paid or 0) }}</strong>.</p>
+      <form method="POST" action="{{ url_for('invoice_payment_correct', invoice_id=inv.id) }}"
+            onsubmit="return confirm('Set total received to the entered amount? This overwrites the recorded total.');">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="correct_amount">Total received to date ($)</label>
+            <input type="text" name="amount" id="correct_amount" inputmode="decimal"
+                   value="{{ '{:.2f}'.format(inv.amount_paid or 0) }}">
+          </div>
+          <div class="form-field" style="display: flex; align-items: flex-end;">
+            <button type="submit" class="btn-secondary">Set amount</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
     {% if inv.status != 'void' %}
     <div class="lead-card">
       <h3 class="lead-card-title">Void Invoice</h3>

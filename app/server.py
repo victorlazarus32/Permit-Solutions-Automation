@@ -2137,6 +2137,31 @@ def invoice_record_payment(invoice_id: int):
     return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
 
+@app.post("/invoices/<int:invoice_id>/payment/correct")
+def invoice_payment_correct(invoice_id: int):
+    """Set the total received to an EXACT amount — fixes a double/mistaken payment."""
+    try:
+        existing = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(existing)
+    if blocked:
+        return blocked
+    amount = _parse_money(request.form.get("amount"))
+    try:
+        inv = inv_mod.set_amount_paid(invoice_id, amount)
+    except (ValueError, LookupError) as e:
+        flash(str(e), "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    flash(
+        f"Corrected. Total received is now ${float(inv['amount_paid'] or 0):,.2f}; "
+        f"balance ${inv['balance_due']:,.2f} ({inv['status']}).",
+        "success",
+    )
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+
+
 @app.post("/invoices/<int:invoice_id>/record-deposit")
 def invoice_record_deposit(invoice_id: int):
     """One-click: record the invoice's deposit as paid.

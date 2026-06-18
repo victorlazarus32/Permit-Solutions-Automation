@@ -521,6 +521,46 @@ def update_deposit_details(
     return get_invoice(invoice_id)
 
 
+def set_amount_paid(
+    invoice_id: int,
+    amount: float,
+    *,
+    method: str | None = None,
+    reference: str | None = None,
+) -> dict:
+    """Set amount_paid to an EXACT value (not additive). Use to correct a
+    mistaken/double-recorded payment. Recomputes status: paid when >= total,
+    partial when >0 and < total, else back to sent. Does not touch deposit flags."""
+    inv = get_invoice(invoice_id)
+    if inv["status"] == "void":
+        raise ValueError("Cannot adjust a void invoice.")
+    new_paid = round(max(0.0, float(amount or 0)), 2)
+    total = float(inv["total"] or 0)
+    if new_paid > 0 and new_paid + 0.005 >= total:
+        new_status, paid_ts = "paid", (inv["paid_at"] or _now())
+    elif new_paid > 0:
+        new_status, paid_ts = "partial", inv["paid_at"]
+    else:
+        new_status, paid_ts = "sent", None
+
+    now = _now()
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE invoices
+               SET amount_paid       = ?,
+                   status            = ?,
+                   paid_at           = ?,
+                   payment_method    = COALESCE(?, payment_method),
+                   payment_reference = COALESCE(?, payment_reference),
+                   updated_at        = ?
+             WHERE id = ?
+            """,
+            (new_paid, new_status, paid_ts, method, reference, now, invoice_id),
+        )
+    return get_invoice(invoice_id)
+
+
 def void_invoice(invoice_id: int, reason: str | None = None) -> dict:
     inv = get_invoice(invoice_id)
     if inv["status"] == "void":
