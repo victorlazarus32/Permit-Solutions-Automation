@@ -322,8 +322,23 @@
     }
   });
 
-  // Start with one empty property
-  addProperty();
+  // Prefill from ?prefill=<base64url JSON> for one-click pre-filled proposals,
+  // otherwise start with one empty property.
+  (function initForm() {
+    const raw = new URLSearchParams(window.location.search).get('prefill');
+    if (raw) {
+      try {
+        let b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4) b64 += '=';
+        const bin = atob(b64);
+        const json = decodeURIComponent(Array.prototype.map.call(bin,
+          c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''));
+        loadModel(JSON.parse(json));
+        return;
+      } catch (e) { /* fall through to a blank form */ }
+    }
+    addProperty();
+  })();
 })();
 </script>
 {% endblock %}
