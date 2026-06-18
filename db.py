@@ -511,6 +511,7 @@ def _migrate_invoices(conn) -> None:
         ("contract_id",    "INTEGER"),                    # FK -> contracts.id, nullable
         ("permit_number",  "TEXT"),                        # municipal permit number for the job, entered at intake
         ("proposal_data",  "TEXT"),                        # JSON: structured proposal/agreement inputs (properties, permit rows, fee, terms) so the branded PDF can be regenerated on demand
+        ("costs",          "TEXT"),                        # JSON: list of internal overhead costs [{description, amount}] subtracted from profit (e.g. as-built letter $250)
         ("deposit_amount", "REAL NOT NULL DEFAULT 0"),    # dollars due as a deposit (0 = none)
         ("deposit_paid_at",   "TEXT"),                    # date the deposit was collected (YYYY-MM-DD)
         ("deposit_method",    "TEXT"),                    # how the deposit was paid: zelle/check/cash/card/other

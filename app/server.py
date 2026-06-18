@@ -1702,18 +1702,62 @@ def invoice_detail(invoice_id: int):
         return blocked
     line_items = json.loads(inv["line_items"])
     attached_contract = contracts_mod.get_contract(inv["contract_id"]) if inv.get("contract_id") else None
+    costs = inv_mod.get_costs(invoice_id)
+    costs_total = round(sum(float(c.get("amount") or 0) for c in costs), 2)
+    net_profit = round(float(inv["total"]) - costs_total, 2)
     return render_template(
         "invoice_detail.html",
         inv=inv,
         line_items=line_items,
         today_iso=dt.date.today().isoformat(),
         attached_contract=attached_contract,
+        costs=costs,
+        costs_total=costs_total,
+        net_profit=net_profit,
         workflow_statuses=inv_mod.WORKFLOW_STATUSES,
         workflow_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
         workflow_history=inv_mod.list_workflow_history(invoice_id),
         invoice_tasks=inv_mod.list_invoice_tasks(invoice_id),
         all_users=sorted(_load_users().keys()) if is_admin() else [],
     )
+
+
+@app.post("/invoices/<int:invoice_id>/costs/add")
+def invoice_cost_add(invoice_id: int):
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
+    desc = _fs(request.form, "cost_description") or "Cost"
+    amount = _parse_money(request.form.get("cost_amount"))
+    if amount <= 0:
+        flash("Enter a cost amount greater than zero.", "error")
+    else:
+        inv_mod.add_cost(invoice_id, desc, amount)
+        flash(f"Added cost: {desc} (${amount:,.2f}).", "success")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#costs")
+
+
+@app.post("/invoices/<int:invoice_id>/costs/remove")
+def invoice_cost_remove(invoice_id: int):
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
+    try:
+        index = int(request.form.get("index"))
+    except (TypeError, ValueError):
+        index = -1
+    inv_mod.remove_cost(invoice_id, index)
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#costs")
 
 
 @app.route("/invoices/<int:invoice_id>/edit", methods=["GET", "POST"])

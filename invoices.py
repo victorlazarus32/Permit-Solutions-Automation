@@ -832,6 +832,49 @@ def get_proposal_data(invoice_id: int) -> dict | None:
         return None
 
 
+def get_costs(invoice_id: int) -> list[dict]:
+    """Internal overhead/cost line items for an invoice: [{description, amount}]."""
+    with connect() as conn:
+        row = conn.execute("SELECT costs FROM invoices WHERE id = ?", (invoice_id,)).fetchone()
+    if not row or not row[0]:
+        return []
+    try:
+        items = json.loads(row[0])
+        return items if isinstance(items, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def set_costs(invoice_id: int, costs: list[dict]) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE invoices SET costs = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(costs), _now(), invoice_id),
+        )
+
+
+def add_cost(invoice_id: int, description: str, amount: float) -> list[dict]:
+    costs = get_costs(invoice_id)
+    costs.append({
+        "description": (description or "").strip() or "Cost",
+        "amount": round(float(amount or 0), 2),
+    })
+    set_costs(invoice_id, costs)
+    return costs
+
+
+def remove_cost(invoice_id: int, index: int) -> list[dict]:
+    costs = get_costs(invoice_id)
+    if 0 <= index < len(costs):
+        costs.pop(index)
+        set_costs(invoice_id, costs)
+    return costs
+
+
+def costs_total(invoice_id: int) -> float:
+    return round(sum(float(c.get("amount") or 0) for c in get_costs(invoice_id)), 2)
+
+
 def list_workflow_history(invoice_id: int) -> list[dict]:
     with connect() as conn:
         rows = conn.execute(

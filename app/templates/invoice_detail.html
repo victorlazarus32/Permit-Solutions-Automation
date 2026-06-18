@@ -118,6 +118,63 @@
       </table>
     </div>
 
+    <!-- ===== Overhead & Costs (internal margin tracking, not on client PDF) ===== -->
+    <div class="lead-card" id="costs">
+      <h3 class="lead-card-title">Overhead &amp; Costs</h3>
+      <p class="lead-card-desc" style="margin-top: 0;">Internal only — not shown on the client invoice. Subtracted from profit.</p>
+
+      <table class="data-table">
+        <thead>
+          <tr><th>Cost</th><th class="num">Amount</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for c in costs %}
+          <tr>
+            <td>{{ c.description }}</td>
+            <td class="num">${{ '{:,.2f}'.format(c.amount) }}</td>
+            <td class="num">
+              <form method="POST" action="{{ url_for('invoice_cost_remove', invoice_id=inv.id) }}" style="display: inline;">
+                <input type="hidden" name="index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn-link" style="color: var(--red);" title="Remove">✕</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" style="color: var(--ink-mute);">No costs yet.</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td class="num"><strong>Total costs</strong></td><td class="num"><strong>${{ '{:,.2f}'.format(costs_total) }}</strong></td><td></td></tr>
+          <tr>
+            <td class="num">Net profit (Total − Costs)</td>
+            <td class="num" style="color: {{ 'var(--brand-orange)' if costs_total > 0 else 'var(--emerald)' }};"><strong>${{ '{:,.2f}'.format(net_profit) }}</strong></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <form method="POST" action="{{ url_for('invoice_cost_add', invoice_id=inv.id) }}" style="margin-top: 10px;">
+        <div class="form-row" style="align-items: flex-end;">
+          <div class="form-field">
+            <label for="cost_description">Cost description</label>
+            <input type="text" name="cost_description" id="cost_description" placeholder="e.g. As-built letter">
+          </div>
+          <div class="form-field" style="max-width: 140px;">
+            <label for="cost_amount">Amount ($)</label>
+            <input type="text" name="cost_amount" id="cost_amount" placeholder="250">
+          </div>
+          <div class="form-field" style="display: flex; align-items: flex-end;">
+            <button type="submit" class="btn-primary">Add cost</button>
+          </div>
+        </div>
+        <div style="margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 0.8rem; color: var(--ink-mute);">Quick add:</span>
+          <button type="button" class="btn-link"
+            onclick="document.getElementById('cost_description').value='As-built letter'; document.getElementById('cost_amount').value='250';">As-built letter ($250)</button>
+        </div>
+      </form>
+    </div>
+
     {% if inv.notes %}
     <div class="lead-card">
       <h3 class="lead-card-title">Internal Notes</h3>
