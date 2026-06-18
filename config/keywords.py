@@ -28,6 +28,14 @@ make the matched_keywords column self-documenting at review time.
 # parser instead of letting them sit in the queue for manual triage.
 EXCLUSION_COOCCURRENCE = [
     (r"\bmildew\b", r"\broof"),
+    # Appliance/bulk-trash disposal that incidentally mentions "door".
+    # e.g. "REFRIGERATOR PLACED ON THE SWALE FOR DISPOSAL WITH DOOR" matches
+    # `door` but is a sanitation citation, not a door permit. Narrowly keyed on
+    # `door` only (the lone false-positive keyword) co-occurring with appliance
+    # or bulk-disposal language — real door-permit cases never mention these,
+    # and fence/pergola/terrace matches are untouched.
+    (r"\bdoor",
+     r"\b(refrigerator|fridge|freezer|appliance|microwave|stove|oven|washer|dryer|dishwasher|swale|bulk\s+trash|disposal)\b"),
 ]
 
 
