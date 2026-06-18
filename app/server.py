@@ -933,6 +933,7 @@ def api_search():
 import re as _re_search
 
 _TYLER_CASE_RE = _re_search.compile(r"^CC-\d{2}-\d{5}-NOV$", _re_search.IGNORECASE)
+_MD_CASE_RE    = _re_search.compile(r"^\d{11}$")                    # Miami-Dade code case e.g. 20260247699
 _FOLIO_RE      = _re_search.compile(r"^\d{13}$")
 _FOLIO_FMT_RE  = _re_search.compile(r"^\d{2}-\d{4}-\d{3}-\d{4}$")  # 01-4137-023-0020
 _ADDRESS_RE    = _re_search.compile(r"^\d+\s+\w")                    # 11769 SW...
@@ -945,6 +946,8 @@ def _classify_query(q: str) -> str:
         return "none"
     if _TYLER_CASE_RE.match(s):
         return "tyler_case"
+    if _MD_CASE_RE.match(s):
+        return "md_case"
     if _FOLIO_RE.match(s) or _FOLIO_FMT_RE.match(s):
         return "pa_folio"
     if _ADDRESS_RE.match(s):
@@ -972,6 +975,23 @@ def api_lookup_external():
                 "owner_full_name": "",  # Tyler doesn't return owner
                 "violation":       (row.get("Description") or "")[:160],
                 "prefill_url":     url_for("invoice_new") + f"?case=homestead|{row.get('CaseNumber','')}",
+            })
+
+    elif kind == "md_case":
+        from connectors.miami_dade_unincorporated import lookup_case as _md_lookup
+        rec = _md_lookup(q)
+        if rec:
+            results.append({
+                "source":          "miami_dade",
+                "label":           "Miami-Dade County (Code Enforcement)",
+                "case_number":     rec.get("case_number") or "",
+                "property_address": rec.get("property_address") or "",
+                "owner_full_name": rec.get("owner_full_name") or "",
+                "folio":           rec.get("folio_number") or "",
+                "violation":       (rec.get("alleged_violation") or "")[:160],
+                # Import-and-invoice: ingests the case (so it's now in the app)
+                # then opens a prefilled invoice from it.
+                "prefill_url":     url_for("md_import_case", case=rec.get("case_number", "")),
             })
 
     elif kind == "pa_folio":
@@ -1006,6 +1026,29 @@ def api_lookup_external():
             })
 
     return jsonify({"q": q, "kind": kind, "results": results})
+
+
+@app.get("/cases/md-import")
+def md_import_case():
+    """Live-lookup a Miami-Dade case, ingest it into the violations table, then
+    open a prefilled invoice from it. Reached from the universal search bar when
+    a case number isn't yet in the local DB."""
+    case = (request.args.get("case") or "").strip()
+    if not case:
+        flash("No case number provided.", "error")
+        return redirect(url_for("dashboard"))
+    from connectors.miami_dade_unincorporated import import_case as _md_import
+    try:
+        rec = _md_import(case)
+    except Exception as e:
+        log.exception("Miami-Dade case import failed")
+        flash(f"Could not pull case {case}: {e}", "error")
+        return redirect(url_for("dashboard"))
+    if not rec:
+        flash(f"Case {case} was not found at Miami-Dade.", "error")
+        return redirect(url_for("dashboard"))
+    flash(f"Imported case {case} from Miami-Dade. Review and create the invoice.", "success")
+    return redirect(url_for("invoice_new") + f"?case=miami_dade_unincorporated|{case}")
 
 
 @app.route("/pipeline")

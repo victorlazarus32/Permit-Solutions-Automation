@@ -222,6 +222,88 @@ def run(start: date | None = None, end: date | None = None, headless: bool = Tru
     }
 
 
+CASE_DETAILS_URL = (
+    "https://www.miamidade.gov/Apps/RER/RegulationSupportWebViewer/Home/CaseDetails?caseNum={case}"
+)
+_LOOKUP_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+
+# CaseDetails page label -> canonical field. (Owner Adress is misspelled in the
+# county's markup, same as the Excel export.)
+_DETAIL_LABELS = {
+    "Case Number":       "case_number",
+    "Case Type":         "case_type",
+    "Property Address":  "property_address",
+    "Folio Number":      "folio_number",
+    "Legal Description": "legal_description",
+    "Open Date":         "open_date",
+    "Close Date":        "close_date",
+    "DeputyClerk":       "deputy_clerk",
+    "Inspector":         "inspector",
+    "Permit Number":     "permit_number",
+    "Owner Name":        "owner_full_name",
+    "Owner Adress":      "owner_mailing_address",
+    "Building Code":     "building_code",
+    "Comments":          "comments",
+    "AllegedViolation":  "alleged_violation",
+}
+
+
+def lookup_case(case_number: str) -> dict | None:
+    """Live single-case lookup against the county's CaseDetails page.
+
+    Returns a dict of canonical fields, or None if the case isn't found or the
+    request fails. Read-only — does not touch the DB. Fast (short timeout) and
+    swallows transport errors, for use by the universal search bar."""
+    import requests
+    from lxml import html as lxml_html
+
+    case_number = (case_number or "").strip()
+    if not case_number:
+        return None
+    try:
+        r = requests.get(
+            CASE_DETAILS_URL.format(case=case_number),
+            headers={"User-Agent": _LOOKUP_UA}, timeout=12,
+        )
+        r.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    doc = lxml_html.fromstring(r.text)
+    out: dict = {}
+    for tr in doc.xpath("//tr"):
+        cells = [c.text_content().strip() for c in tr.xpath("./td|./th")]
+        if len(cells) >= 2 and cells[0].rstrip(":").strip() in _DETAIL_LABELS:
+            out[_DETAIL_LABELS[cells[0].rstrip(":").strip()]] = cells[1].strip()
+
+    # Guard: a missing case returns a generic page with no Case Number row, and
+    # we want the returned number to actually match what we asked for.
+    if not out.get("case_number") or out["case_number"] != case_number:
+        return None
+    return out
+
+
+def import_case(case_number: str) -> dict | None:
+    """Live-lookup a case and upsert it into the violations table, bypassing the
+    keyword filter (the operator chose to pull it, so scope doesn't gate it).
+    Returns the upserted record, or None if the case couldn't be found."""
+    fields = lookup_case(case_number)
+    if not fields:
+        return None
+    init_db()
+    record = build_record(
+        source=SOURCE,
+        case_number=fields["case_number"],
+        fields={k: v for k, v in fields.items() if k != "case_number"},
+        raw_source_file="live:CaseDetails",
+        skip_filter=True,
+    )
+    if record:
+        upsert_violations([record])
+    return record
+
+
 def _cli() -> None:
     parser = argparse.ArgumentParser(description=f"Run the {SOURCE} connector.")
     parser.add_argument("--start", type=date.fromisoformat, help="YYYY-MM-DD (default: last run date or 7 days ago)")
