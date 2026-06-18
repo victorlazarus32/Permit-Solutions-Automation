@@ -1475,7 +1475,11 @@ def _build_proposal_context(data: dict) -> dict:
     properties = []
     permit_count = 0
     for p in (data.get("properties") or []):
-        permits = p.get("permits") or []
+        # Courtesy/out-of-scope permits are tracked internally but never billed,
+        # so they are excluded from the contract PDF's tables, count, and total.
+        permits = [pm for pm in (p.get("permits") or []) if not pm.get("out_of_scope")]
+        if not permits:
+            continue
         permit_count += len(permits)
         properties.append({
             "address": p.get("address") or "",
@@ -1711,6 +1715,8 @@ def invoice_detail(invoice_id: int):
     if proposal:
         for _p in (proposal.get("properties") or []):
             for _pm in (_p.get("permits") or []):
+                if _pm.get("out_of_scope"):
+                    continue  # courtesy items don't count toward the billable N
                 permit_total += 1
                 if (_pm.get("status") or "open") == "resolved":
                     permit_resolved += 1
@@ -1819,6 +1825,54 @@ def invoice_permit_update(invoice_id: int):
 
     inv_mod.set_proposal_data(invoice_id, data)
     flash(f"Updated {pm.get('ref')}.", "success")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
+
+
+@app.post("/invoices/<int:invoice_id>/permits/add")
+def invoice_permit_add(invoice_id: int):
+    """Add a permit to the tracker — typically a courtesy/out-of-scope item
+    ($0, not billed, excluded from the contract PDF) so we can show the client
+    work we did outside the agreement."""
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
+    data = inv_mod.get_proposal_data(invoice_id)
+    if not data:
+        flash("This invoice has no proposal/permit list to add to.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    f = request.form
+    try:
+        pi = int(f.get("pi"))
+    except (TypeError, ValueError):
+        pi = -1
+    props = data.get("properties") or []
+    if not (0 <= pi < len(props)):
+        flash("Pick a property to add the permit to.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
+    ref = _fs(f, "ref")
+    if not ref:
+        flash("Enter the process/permit number.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
+    permit = {
+        "ref": ref,
+        "work": _fs(f, "work") or "",
+        "trade": _fs(f, "trade") or "",
+        "issued": _fs(f, "issued") or "",
+        "marker": "",
+        "actual_permit_number": _fs(f, "actual_permit_number") or "",
+        "resolution_note": (f.get("resolution_note") or "").strip(),
+        "status": "open",
+        "out_of_scope": bool(f.get("out_of_scope")),
+    }
+    props[pi].setdefault("permits", []).append(permit)
+    inv_mod.set_proposal_data(invoice_id, data)
+    tag = " (courtesy, $0)" if permit["out_of_scope"] else ""
+    flash(f"Added {ref}{tag} to the tracker.", "success")
     return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
 
 

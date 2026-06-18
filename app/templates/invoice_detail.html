@@ -137,7 +137,7 @@
             {% set qi = loop.index0 %}
             {% set resolved = (pm.status or 'open') == 'resolved' %}
             <tr>
-              <td class="mono">{{ pm.ref }}</td>
+              <td class="mono">{{ pm.ref }}{% if pm.out_of_scope %}<br><span style="font-size: 0.64rem; letter-spacing: 0.06em; color: #6b7280; background: #f3f4f6; padding: 1px 5px; border-radius: 6px;">COURTESY · $0</span>{% endif %}</td>
               <td>
                 {{ pm.work }}
                 <br><span style="font-size: 0.78rem; color: var(--ink-mute);">{{ pm.trade }} · {{ pm.issued }}</span>
@@ -173,6 +173,23 @@
             {% endfor %}
           </tbody>
         </table>
+        <details style="margin-top: 6px;">
+          <summary style="cursor: pointer; font-size: 0.8rem; color: var(--ink-mute);">+ Add a permit / courtesy item</summary>
+          <form method="POST" action="{{ url_for('invoice_permit_add', invoice_id=inv.id) }}"
+                style="margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-width: 560px;">
+            <input type="hidden" name="pi" value="{{ pi }}">
+            <input type="text" name="ref" placeholder="Process / permit # *">
+            <input type="text" name="actual_permit_number" placeholder="Actual permit #">
+            <input type="text" name="work" placeholder="Work (e.g. General building)">
+            <input type="text" name="trade" placeholder="Trade">
+            <input type="text" name="issued" placeholder="Issued (e.g. Jun 8, 2023)">
+            <input type="text" name="resolution_note" placeholder="Note / close-out path">
+            <label style="grid-column: 1 / -1; font-size: 0.8rem; display: flex; gap: 6px; align-items: center;">
+              <input type="checkbox" name="out_of_scope" checked> Out of scope — $0 courtesy (not billed, not on the contract PDF)
+            </label>
+            <button type="submit" class="btn-secondary btn-tiny" style="grid-column: 1 / -1; justify-self: start;">Add to tracker</button>
+          </form>
+        </details>
       </div>
       {% endfor %}
     </div>
