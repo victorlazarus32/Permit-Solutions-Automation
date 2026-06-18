@@ -25,6 +25,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -1901,11 +1902,24 @@ def proposal_new():
         )
         return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
 
+    # Optional ?seed=<name> loads a committed proposal_seeds/<name>.json so we
+    # can hand over a short, reliable pre-filled link (no giant base64 URL).
+    prefill_obj = None
+    seed = (request.args.get("seed") or "").strip()
+    if seed and re.fullmatch(r"[a-z0-9_-]+", seed):
+        seed_path = PROJECT_ROOT / "proposal_seeds" / f"{seed}.json"
+        if seed_path.exists():
+            try:
+                prefill_obj = json.loads(seed_path.read_text(encoding="utf-8"))
+            except (ValueError, OSError):
+                prefill_obj = None
+
     return render_template(
         "proposal_form.html",
         today_iso=dt.date.today().isoformat(),
         all_users=sorted(_load_users().keys()) if is_admin() else [],
         is_admin=is_admin(),
+        prefill_obj=prefill_obj,
     )
 
 

@@ -165,6 +165,7 @@
   <option value="Public Works"><option value="Fire"><option value="Plumbing"><option value="Roofing">
 </datalist>
 
+{% if prefill_obj %}<script>window.__PREFILL__ = {{ prefill_obj|tojson }};</script>{% endif %}
 <script>
 (function() {
   const $ = (s, el) => (el || document).querySelector(s);
@@ -322,9 +323,10 @@
     }
   });
 
-  // Prefill from ?prefill=<base64url JSON> for one-click pre-filled proposals,
-  // otherwise start with one empty property.
+  // Prefill order: server-provided seed (?seed=name) -> ?prefill=<base64> ->
+  // a blank form with one empty property.
   (function initForm() {
+    if (window.__PREFILL__) { loadModel(window.__PREFILL__); return; }
     const raw = new URLSearchParams(window.location.search).get('prefill');
     if (raw) {
       try {

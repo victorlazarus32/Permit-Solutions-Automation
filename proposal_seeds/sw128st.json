@@ -1,0 +1,40 @@
+{
+  "client_name": "So-Jo & Assoc Ltd",
+  "prepared_for": "So-Jo & Assoc Ltd  •  Flyer Ventures Ltd Partnership",
+  "subtitle": "Two commercial properties • SW 128 ST, Miami-Dade County",
+  "fee_per_permit": 975,
+  "standard_rate": 1250,
+  "deposit_pct": 50,
+  "validity_days": 15,
+  "intro_extra": "The one active permit currently in good standing is not part of this agreement.",
+  "active_excluded": "11900 SW 128 ST also has one active permit (C2025018474, fire alarm, issued 2025) that is currently in good standing. It is not expired and is not part of this proposal.",
+  "workflow_start": "reviewing_documents",
+  "properties": [
+    {
+      "address": "12176 SW 128 ST",
+      "folio": "3059130110010",
+      "owner": "So-Jo & Assoc Ltd",
+      "footnotes": ["† Permit S1991090694 (1991) predates Hurricane Andrew (August 1992). Many Miami-Dade County permit records from before the storm were destroyed. Pending confirmation with the County, this permit may require little or no work to clear and could be closed administratively."],
+      "permits": [
+        {"ref": "C1998155371", "work": "A/C (unlimited) / sheet metal", "trade": "Mechanical", "issued": "Jul 20, 1998", "marker": ""},
+        {"ref": "C1993187054", "work": "Burglar alarm", "trade": "Electrical", "issued": "Mar 3, 1993", "marker": ""},
+        {"ref": "N1993165920", "work": "Electrical", "trade": "Electrical", "issued": "Feb 15, 1993", "marker": ""},
+        {"ref": "N1993066043", "work": "A/C (unlimited)", "trade": "Mechanical", "issued": "Nov 19, 1992", "marker": ""},
+        {"ref": "C1993026953", "work": "General building (county)", "trade": "Building", "issued": "Nov 3, 1992", "marker": ""},
+        {"ref": "C1993026978", "work": "General building (county)", "trade": "Building", "issued": "Nov 3, 1992", "marker": ""},
+        {"ref": "N1992091469", "work": "Burglar alarm", "trade": "Electrical", "issued": "May 20, 1992", "marker": ""},
+        {"ref": "S1991090694", "work": "Burglar alarm", "trade": "Electrical", "issued": "May 27, 1991", "marker": "†"}
+      ]
+    },
+    {
+      "address": "11900 SW 128 ST",
+      "folio": "3059130030320",
+      "owner": "Flyer Ventures Ltd Partnership",
+      "footnotes": [],
+      "permits": [
+        {"ref": "C1994016981", "work": "Fire alarm", "trade": "Electrical", "issued": "Oct 24, 1993", "marker": ""},
+        {"ref": "C1993109466", "work": "Heating / mechanical ventilation", "trade": "Mechanical", "issued": "Dec 29, 1992", "marker": ""}
+      ]
+    }
+  ]
+}
