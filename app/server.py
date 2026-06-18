@@ -1386,6 +1386,7 @@ def _render_invoice_pdf(inv: dict) -> bytes:
 
     attached_contract = contracts_mod.get_contract(inv["contract_id"]) if inv.get("contract_id") else None
     html = tmpl.render(
+        logo_src=(PROJECT_ROOT / "logos" / "ps-squared-mark-800.png").as_uri(),
         invoice_number=inv["invoice_number"],
         status=inv["status"],
         client_name=inv["client_name"],

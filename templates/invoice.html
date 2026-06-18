@@ -55,19 +55,23 @@
     color: #4b5563;
     letter-spacing: 0.01em;
   }
+  .lockup { display: table; }
+  .lockup .mark-cell { display: table-cell; vertical-align: middle; padding-right: 11pt; }
+  .lockup .text-cell { display: table-cell; vertical-align: middle; }
+  .logo { height: 0.5in; width: auto; display: block; }
   .wordmark {
     font-weight: 700;
-    font-size: 15.5pt;
-    letter-spacing: 0.12em;
+    font-size: 12.5pt;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #0b1220;
-    line-height: 1.1;
+    line-height: 1.05;
     white-space: nowrap;
   }
   .tagline {
-    margin-top: 5pt;
-    font-size: 8pt;
-    letter-spacing: 0.06em;
+    margin-top: 4pt;
+    font-size: 7.5pt;
+    letter-spacing: 0.05em;
     color: #4b5563;
     white-space: nowrap;
   }
@@ -298,8 +302,15 @@
 
   <div class="header">
     <div class="brand">
-      <div class="wordmark">Permit Solutions</div>
-      <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+      <div class="lockup">
+        <div class="mark-cell">
+          <img class="logo" src="{{ logo_src }}" alt="PS² — Permit Solutions Services">
+        </div>
+        <div class="text-cell">
+          <div class="wordmark">Permit Solutions Services</div>
+          <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+        </div>
+      </div>
     </div>
     <div class="meta">
       <div class="doctype">{{ 'Estimate' if status == 'draft' else 'Invoice' }}</div>
