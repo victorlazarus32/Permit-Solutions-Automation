@@ -1,0 +1,164 @@
+<!--
+  Permit Solutions Services — Client Progress Report
+  Expired-permit close-out, SW 128 ST. Client-facing status as of 2026-06-18.
+  Standalone: open in a browser / rendered to PDF via headless Edge.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Permit Close-Out Progress Report — SW 128 ST</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  @page { size: letter; margin: 0.55in 0.7in; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: "Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 9.5pt; line-height: 1.42; color: #000; }
+
+  .header { display: table; width: 100%; }
+  .header .brand { display: table-cell; vertical-align: top; width: 68%; padding-right: 16pt; }
+  .header .contact { display: table-cell; vertical-align: bottom; text-align: right; width: 32%;
+    font-size: 8pt; line-height: 1.4; }
+  .lockup { display: table; }
+  .lockup .mark-cell { display: table-cell; vertical-align: middle; padding-right: 11pt; }
+  .lockup .text-cell { display: table-cell; vertical-align: middle; }
+  .logo { height: 0.5in; width: auto; display: block; }
+  .wordmark { font-weight: 700; font-size: 12pt; letter-spacing: 0.07em; text-transform: uppercase; color: #111; }
+  .tagline { margin-top: 4pt; font-size: 7pt; letter-spacing: 0.05em; }
+  .contact-line { display: block; }
+  hr.accent { border: 0; border-top: 1.25pt solid #c2410c; margin: 8pt 0 11pt 0; }
+
+  .doc-title { font-size: 13pt; font-weight: 700; margin: 0 0 1pt 0; }
+  .doc-sub { font-size: 8.5pt; color: #444; margin-bottom: 11pt; }
+  .meta-row { display: table; width: 100%; margin: 0 0 11pt 0; font-size: 9pt; }
+  .meta-row .cell { display: table-cell; vertical-align: top; width: 50%; }
+  .meta-row .cell.right { text-align: right; }
+  .meta-row .label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 7pt; color: #777; display: block; margin-bottom: 2pt; }
+  p { margin: 0 0 6pt 0; }
+
+  .summary { border: 1pt solid #000; border-radius: 4pt; padding: 9pt 12pt; margin-bottom: 4pt; display: table; width: 100%; }
+  .summary .s-cell { display: table-cell; text-align: center; width: 33.33%; }
+  .summary .s-num { font-size: 16pt; font-weight: 700; }
+  .summary .s-num.done { color: #065f46; }
+  .summary .s-num.prog { color: #c2410c; }
+  .summary .s-lbl { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.1em; color: #777; }
+
+  .section-heading { font-size: 8pt; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+    color: #111; margin: 14pt 0 5pt 0; padding-bottom: 3pt; border-bottom: 0.4pt solid #ddd; page-break-after: avoid; }
+  .prop-block { page-break-inside: avoid; margin-bottom: 6pt; }
+  .prop-head { font-size: 9.5pt; font-weight: 600; margin: 8pt 0 1pt 0; }
+  .prop-sub { font-size: 7.5pt; color: #777; margin-bottom: 4pt; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  table.t th { text-align: left; padding: 3pt 6pt; font-size: 6.8pt; letter-spacing: 0.09em;
+    text-transform: uppercase; color: #777; border-bottom: 0.6pt solid #000; }
+  table.t td { padding: 4pt 6pt; border-bottom: 0.4pt solid #e4e4e4; vertical-align: top; }
+  .ref { font-family: Consolas, monospace; font-size: 8pt; white-space: nowrap; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 6.8pt; font-weight: 700; letter-spacing: 0.06em; }
+  .pill.done { background: #d1fae5; color: #065f46; }
+  .pill.prog { background: #ffedd5; color: #9a3412; }
+
+  .note-box { border-left: 2.5pt solid #c2410c; background: #fff7ed; padding: 7pt 11pt;
+    font-size: 8.4pt; margin-top: 8pt; line-height: 1.45; page-break-inside: avoid; }
+  .note-box .nb-label { display: block; font-size: 7pt; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: #c2410c; margin-bottom: 3pt; }
+
+  .footer { text-align: center; font-size: 7pt; letter-spacing: 0.1em; color: #000;
+    margin-top: 16pt; padding-top: 6pt; border-top: 0.4pt solid #000; text-transform: uppercase; }
+  .footer .url { display: block; margin-top: 2pt; text-transform: none; }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="brand">
+      <div class="lockup">
+        <div class="mark-cell"><img class="logo" src="ps-squared-mark.png" alt="PS² — Permit Solutions Services"></div>
+        <div class="text-cell">
+          <div class="wordmark">Permit Solutions Services</div>
+          <div class="tagline">Permit Expediting &nbsp;&bull;&nbsp; Code Compliance &nbsp;&bull;&nbsp; Violation Resolution</div>
+        </div>
+      </div>
+    </div>
+    <div class="contact">
+      <span class="contact-line">305-600-9422</span>
+      <span class="contact-line">help@permitsolutions.us</span>
+      <span class="contact-line">www.permitsolutions.us</span>
+    </div>
+  </div>
+  <hr class="accent">
+
+  <div class="doc-title">Expired Permit Close-Out &mdash; Progress Report</div>
+  <div class="doc-sub">Two commercial properties &bull; SW 128 ST, Miami-Dade County</div>
+
+  <div class="meta-row">
+    <div class="cell">
+      <span class="label">Prepared For</span>
+      So-Jo &amp; Assoc Ltd &nbsp;&bull;&nbsp; Flyer Ventures Ltd Partnership
+    </div>
+    <div class="cell right">
+      <span class="label">Report Date</span>
+      June 18, 2026
+    </div>
+  </div>
+
+  <p>Below is the current status of the expired permits we are closing out with Miami-Dade County under our
+  agreement. We are working each permit individually with the County's trade departments and will continue to
+  update you as each one reaches a closed status.</p>
+
+  <div class="summary">
+    <div class="s-cell"><div class="s-num">10</div><div class="s-lbl">Permits under contract</div></div>
+    <div class="s-cell"><div class="s-num done">4</div><div class="s-lbl">Closed</div></div>
+    <div class="s-cell"><div class="s-num prog">6</div><div class="s-lbl">In progress</div></div>
+  </div>
+
+  <!-- 12176 -->
+  <div class="prop-block">
+    <div class="prop-head">12176 SW 128 ST</div>
+    <div class="prop-sub">Folio 3059130110010 &bull; Owner of record: So-Jo &amp; Assoc Ltd</div>
+    <table class="t">
+      <thead><tr><th style="width:14%;">Permit #</th><th>Work</th><th style="width:14%;">Status</th><th style="width:34%;">Notes / next step</th></tr></thead>
+      <tbody>
+        <tr><td class="ref">1993052444</td><td>A/C (unlimited)</td><td><span class="pill done">CLOSED</span></td><td>Closed with the County.</td></tr>
+        <tr><td class="ref">1993033048</td><td>General building</td><td><span class="pill done">CLOSED</span></td><td>Closed with the County.</td></tr>
+        <tr><td class="ref">&mdash;</td><td>A/C / sheet metal</td><td><span class="pill done">CLOSED</span></td><td>Closed with the County.</td></tr>
+        <tr><td class="ref">1993033053</td><td>General building</td><td><span class="pill prog">IN PROGRESS</span></td><td>County mechanical inspection required to close.</td></tr>
+        <tr><td class="ref">1993134377</td><td>Electrical</td><td><span class="pill prog">IN PROGRESS</span></td><td>Updating contractor of record, retrieving archived plans, reactivating permit, then final inspection.</td></tr>
+        <tr><td class="ref">1993152146</td><td>Burglar alarm</td><td><span class="pill prog">IN PROGRESS</span></td><td>Same close-out path: reactivate permit, archived plans, final inspection.</td></tr>
+        <tr><td class="ref">1992068073</td><td>Burglar alarm</td><td><span class="pill prog">IN PROGRESS</span></td><td>Same close-out path: reactivate permit, archived plans, final inspection.</td></tr>
+        <tr><td class="ref">&mdash;</td><td>Burglar alarm</td><td><span class="pill prog">IN PROGRESS</span></td><td>Same close-out path: reactivate permit, archived plans, final inspection.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 11900 -->
+  <div class="prop-block">
+    <div class="prop-head">11900 SW 128 ST</div>
+    <div class="prop-sub">Folio 3059130030320 &bull; Owner of record: Flyer Ventures Ltd Partnership</div>
+    <table class="t">
+      <thead><tr><th style="width:14%;">Permit #</th><th>Work</th><th style="width:14%;">Status</th><th style="width:34%;">Notes / next step</th></tr></thead>
+      <tbody>
+        <tr><td class="ref">1994011580</td><td>Fire alarm</td><td><span class="pill prog">IN PROGRESS</span></td><td>Rough inspection approved. Final electrical and fire inspections remaining.</td></tr>
+        <tr><td class="ref">&mdash;</td><td>Heating / mechanical ventilation</td><td><span class="pill done">CLOSED</span></td><td>Closed with the County.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note-box">
+    <span class="nb-label">Additional items handled at no charge</span>
+    As a courtesy, outside the contracted scope, we also: identified the close-out path for the
+    <strong>general building / pallet-rack permit</strong> at 11900 SW 128 ST (County permit 2023052130) &mdash;
+    reissue, plans, fire final, and building final; and confirmed the <strong>active fire-alarm permit</strong>
+    at 11900 SW 128 ST (County permit 2025033044) is current and in good standing, with no action required.
+  </div>
+
+  <p style="margin-top: 10pt; font-size: 8.6pt; color: #444;">We will provide written confirmation as each
+  remaining permit is closed. Please reach out with any questions.</p>
+
+  <div class="footer">
+    Miami-Dade Permit Specialists
+    <span class="url">www.permitsolutions.us</span>
+  </div>
+
+</body>
+</html>
