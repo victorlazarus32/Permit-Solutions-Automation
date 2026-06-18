@@ -376,7 +376,8 @@
         {% endif %}
       </div>
       {% if not deposit_paid %}
-      <form method="POST" action="{{ url_for('invoice_record_deposit', invoice_id=inv.id) }}" style="margin-top: 10px;">
+      <form method="POST" action="{{ url_for('invoice_record_deposit', invoice_id=inv.id) }}" style="margin-top: 10px;"
+            class="js-money-form" data-confirm="Record the deposit as received? Click OK once — don't double-click.">
         <div class="form-row">
           <div class="form-field">
             <label for="dep_paid_at">Date paid</label>
@@ -438,7 +439,8 @@
     {% if inv.status in ('sent', 'partial') %}
     <div class="lead-card">
       <h3 class="lead-card-title">Record Payment</h3>
-      <form method="POST" action="{{ url_for('invoice_record_payment', invoice_id=inv.id) }}">
+      <form method="POST" action="{{ url_for('invoice_record_payment', invoice_id=inv.id) }}"
+            class="js-money-form" data-confirm="Record this payment? Click OK once — don't double-click.">
         <div class="form-row">
           <div class="form-field">
             <label for="amount">Amount ($)</label>
@@ -522,5 +524,18 @@
   .status-void    { background: #f3f4f6;            color: #6b7280; text-decoration: line-through; }
   .status-overdue { background: var(--red-soft);    color: var(--red); }
 </style>
+
+<script>
+  // Guard money forms: confirm once, then disable the submit button so a
+  // double-click / double-tap can't record the same payment twice.
+  document.querySelectorAll('form.js-money-form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      var msg = form.getAttribute('data-confirm');
+      if (msg && !window.confirm(msg)) { e.preventDefault(); return; }
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) { setTimeout(function () { btn.disabled = true; btn.textContent = 'Working…'; }, 0); }
+    });
+  });
+</script>
 
 {% endblock %}
