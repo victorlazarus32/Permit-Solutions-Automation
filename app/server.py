@@ -1705,6 +1705,15 @@ def invoice_detail(invoice_id: int):
     costs = inv_mod.get_costs(invoice_id)
     costs_total = round(sum(float(c.get("amount") or 0) for c in costs), 2)
     net_profit = round(float(inv["total"]) - costs_total, 2)
+    # Per-permit close-out tracker (only for invoices created from a proposal).
+    proposal = inv_mod.get_proposal_data(invoice_id)
+    permit_total = permit_resolved = 0
+    if proposal:
+        for _p in (proposal.get("properties") or []):
+            for _pm in (_p.get("permits") or []):
+                permit_total += 1
+                if (_pm.get("status") or "open") == "resolved":
+                    permit_resolved += 1
     return render_template(
         "invoice_detail.html",
         inv=inv,
@@ -1714,6 +1723,9 @@ def invoice_detail(invoice_id: int):
         costs=costs,
         costs_total=costs_total,
         net_profit=net_profit,
+        proposal=proposal,
+        permit_total=permit_total,
+        permit_resolved=permit_resolved,
         workflow_statuses=inv_mod.WORKFLOW_STATUSES,
         workflow_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
         workflow_history=inv_mod.list_workflow_history(invoice_id),
@@ -1758,6 +1770,56 @@ def invoice_cost_remove(invoice_id: int):
         index = -1
     inv_mod.remove_cost(invoice_id, index)
     return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#costs")
+
+
+@app.post("/invoices/<int:invoice_id>/permits/update")
+def invoice_permit_update(invoice_id: int):
+    """Update one permit's close-out tracking (actual permit #, status, note)
+    inside the invoice's stored proposal_data."""
+    try:
+        inv = inv_mod.get_invoice(invoice_id)
+    except LookupError:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("invoices_list"))
+    blocked = _block_if_not_owner(inv)
+    if blocked:
+        return blocked
+    data = inv_mod.get_proposal_data(invoice_id)
+    if not data:
+        flash("This invoice has no proposal/permit list to update.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id))
+    f = request.form
+    try:
+        pi = int(f.get("pi"))
+        qi = int(f.get("qi"))
+    except (TypeError, ValueError):
+        flash("Could not identify the permit.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
+
+    props = data.get("properties") or []
+    if not (0 <= pi < len(props)):
+        flash("Permit not found.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
+    permits = props[pi].get("permits") or []
+    if not (0 <= qi < len(permits)):
+        flash("Permit not found.", "error")
+        return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
+
+    pm = permits[qi]
+    actual = _fs(f, "actual_permit_number")
+    if actual is not None:
+        pm["actual_permit_number"] = actual
+    note = f.get("resolution_note")
+    if note is not None:
+        pm["resolution_note"] = note.strip()
+    status = (f.get("status") or "").strip()
+    if status in ("open", "resolved"):
+        pm["status"] = status
+        pm["resolved_at"] = dt.date.today().isoformat() if status == "resolved" else None
+
+    inv_mod.set_proposal_data(invoice_id, data)
+    flash(f"Updated {pm.get('ref')}.", "success")
+    return redirect(url_for("invoice_detail", invoice_id=invoice_id) + "#permits-tracker")
 
 
 @app.route("/invoices/<int:invoice_id>/edit", methods=["GET", "POST"])

@@ -118,6 +118,66 @@
       </table>
     </div>
 
+    {% if proposal %}
+    <!-- ===== Permit Close-Out Tracker (per-permit progress from proposal_data) ===== -->
+    <div class="lead-card" id="permits-tracker">
+      <h3 class="lead-card-title">Permit Close-Out Tracker
+        <span style="font-weight: 400; color: var(--ink-mute); font-size: 0.85rem;">· {{ permit_resolved }} of {{ permit_total }} resolved</span>
+      </h3>
+      {% for prop in proposal.properties %}
+      {% set pi = loop.index0 %}
+      <div style="margin-top: 10px;">
+        <div style="font-weight: 600; font-size: 0.9rem;">{{ prop.address }}</div>
+        <table class="data-table">
+          <thead>
+            <tr><th>Process #</th><th>Work</th><th>Actual permit #</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for pm in prop.permits %}
+            {% set qi = loop.index0 %}
+            {% set resolved = (pm.status or 'open') == 'resolved' %}
+            <tr>
+              <td class="mono">{{ pm.ref }}</td>
+              <td>
+                {{ pm.work }}
+                <br><span style="font-size: 0.78rem; color: var(--ink-mute);">{{ pm.trade }} · {{ pm.issued }}</span>
+                {% if pm.resolution_note %}<br><span style="font-size: 0.78rem; font-style: italic; color: var(--ink-mute);">{{ pm.resolution_note }}</span>{% endif %}
+              </td>
+              <td class="mono">{{ pm.actual_permit_number or '—' }}</td>
+              <td>
+                <span class="status {{ 'status-paid' if resolved else 'status-partial' }}">{{ 'RESOLVED' if resolved else 'OPEN' }}</span>
+                {% if resolved and pm.resolved_at %}<br><span style="font-size: 0.72rem; color: var(--ink-mute);">{{ pm.resolved_at }}</span>{% endif %}
+              </td>
+              <td>
+                <details>
+                  <summary style="cursor: pointer; font-size: 0.8rem; color: var(--brand-orange);">Update</summary>
+                  <form method="POST" action="{{ url_for('invoice_permit_update', invoice_id=inv.id) }}"
+                        style="margin-top: 6px; display: flex; flex-direction: column; gap: 6px; min-width: 220px;">
+                    <input type="hidden" name="pi" value="{{ pi }}">
+                    <input type="hidden" name="qi" value="{{ qi }}">
+                    <input type="text" name="actual_permit_number" placeholder="Actual permit #"
+                           value="{{ pm.actual_permit_number or '' }}">
+                    <input type="text" name="resolution_note" placeholder="Note (close-out path, status…)"
+                           value="{{ pm.resolution_note or '' }}">
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                      <select name="status">
+                        <option value="open" {% if not resolved %}selected{% endif %}>Open</option>
+                        <option value="resolved" {% if resolved %}selected{% endif %}>Resolved</option>
+                      </select>
+                      <button type="submit" class="btn-primary btn-tiny">Save</button>
+                    </div>
+                  </form>
+                </details>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- ===== Overhead & Costs (internal margin tracking, not on client PDF) ===== -->
     <div class="lead-card" id="costs">
       <h3 class="lead-card-title">Overhead &amp; Costs</h3>
