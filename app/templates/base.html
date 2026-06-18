@@ -376,6 +376,13 @@
     els.forEach(function(el, i) { el.classList.toggle('qs-active', i === current); });
   });
 
+  // Belt-and-suspenders: navigate on mousedown so a result is never a dead
+  // click, regardless of stacking/anchor quirks.
+  box.addEventListener('mousedown', function(e) {
+    var a = e.target.closest ? e.target.closest('.qs-item') : null;
+    if (a && a.getAttribute('href')) { window.location = a.getAttribute('href'); }
+  });
+
   document.addEventListener('click', function(e) {
     if (!input.contains(e.target) && !box.contains(e.target)) { box.hidden = true; }
   });

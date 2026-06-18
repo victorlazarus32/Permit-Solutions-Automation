@@ -104,7 +104,10 @@ code, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size:
   align-items: center;
   position: sticky;
   top: 0;
-  z-index: 50;
+  /* High z-index so the backdrop-filter stacking context (and the quick-search
+     dropdown that overflows it) sits above the page content below — otherwise
+     the hero paints over the dropdown and swallows clicks on results. */
+  z-index: 1000;
   position: relative;
 }
 .topbar::after {
@@ -974,7 +977,8 @@ details[open] .intake-section-title::after { content: "−"; background: var(--i
   overflow: hidden;
   max-height: 380px;
   overflow-y: auto;
-  z-index: 90;
+  z-index: 1000;
+  isolation: isolate;
 }
 .qs-item {
   display: grid;
