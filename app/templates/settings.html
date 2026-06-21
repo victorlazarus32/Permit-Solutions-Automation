@@ -19,6 +19,60 @@
   <a class="btn-primary" href="{{ url_for('scope_modules_list') }}">Manage Scope Modules</a>
 </p>
 
+<h2 class="section-heading" id="workflow-stages">Workflow Stages</h2>
+<p>These are the stages in the <strong>“Move workflow to”</strong> menu on each invoice. Add your own
+(e.g. <span class="mono">Submitted to HOA</span>) and they show up in the menu and the dashboard pipeline.</p>
+
+{% set custom_keys = custom_statuses | map(attribute='key') | list %}
+{% set term_keys = ['closed_won','closed_lost'] + (custom_statuses | selectattr('terminal') | map(attribute='key') | list) %}
+<table class="data-table" style="max-width: 660px;">
+  <thead><tr><th style="width:48px;">#</th><th>Stage</th><th style="width:120px;">Type</th><th style="width:90px;"></th></tr></thead>
+  <tbody>
+    {% for key, label in workflow_stages %}
+    <tr>
+      <td class="mono" style="color: var(--ink-mute);">{{ loop.index }}</td>
+      <td>{{ label }}{% if key in custom_keys %} <span class="status status-partial" style="font-size: 0.64rem;">CUSTOM</span>{% endif %}</td>
+      <td style="color: var(--ink-mute); font-size: 0.85rem;">{{ 'Closing' if key in term_keys else 'In progress' }}</td>
+      <td>
+        {% if is_admin and key in custom_keys %}
+        <form method="POST" action="{{ url_for('workflow_stage_delete') }}" style="display: inline;"
+              onsubmit="return confirm('Remove the “{{ label }}” stage?');">
+          <input type="hidden" name="key" value="{{ key }}">
+          <button type="submit" class="btn-link" style="color: var(--red);">Remove</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if is_admin %}
+<form method="POST" action="{{ url_for('workflow_stage_add') }}" style="margin-top: 12px; max-width: 660px;">
+  <div class="form-row" style="align-items: flex-end;">
+    <div class="form-field">
+      <label for="wf_label">New stage name</label>
+      <input type="text" name="label" id="wf_label" placeholder="e.g. Submitted to HOA" required>
+    </div>
+    <div class="form-field">
+      <label for="wf_after">Insert after</label>
+      <select name="after_key" id="wf_after">
+        {% for key, label in workflow_stages %}<option value="{{ key }}" {% if key == 'submitted' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-field" style="display: flex; align-items: flex-end;">
+      <button type="submit" class="btn-primary">Add stage</button>
+    </div>
+  </div>
+  <label class="inline-check" style="font-size: 0.85rem; margin-top: 4px;">
+    <input type="checkbox" name="terminal"> This is a closing stage (ends the workflow, like “Closed”)
+  </label>
+</form>
+{% else %}
+<p style="color: var(--ink-mute);">Only admins can add or remove workflow stages.</p>
+{% endif %}
+
+
 <h2 class="section-heading">Lob Credentials</h2>
 <table class="data-table">
   <tr>

@@ -59,6 +59,73 @@ WORKFLOW_STATUS_LABEL = dict(WORKFLOW_STATUSES)
 WORKFLOW_STATUS_KEYS  = [k for k, _ in WORKFLOW_STATUSES]
 WORKFLOW_TERMINAL     = {"closed_won", "closed_lost"}
 
+
+# ----- Admin-defined custom workflow stages (e.g. "Submitted to HOA") -----
+# These are stored in workflow_custom_statuses and merged into the base pipeline
+# at render/validation time, so admins can add stages without code changes.
+
+def _slugify_status(label: str) -> str:
+    import re
+    s = re.sub(r"[^a-z0-9]+", "_", (label or "").strip().lower()).strip("_")
+    return s or "stage"
+
+
+def list_custom_statuses() -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT key, label, after_key, terminal FROM workflow_custom_statuses ORDER BY id"
+        ).fetchall()
+    return [{"key": r[0], "label": r[1], "after_key": r[2], "terminal": bool(r[3])} for r in rows]
+
+
+def add_custom_status(label: str, *, after_key: str | None = None, terminal: bool = False) -> dict:
+    label = (label or "").strip()
+    if not label:
+        raise ValueError("A stage name is required.")
+    base = _slugify_status(label)
+    taken = set(WORKFLOW_STATUS_KEYS) | {c["key"] for c in list_custom_statuses()}
+    key, i = base, 2
+    while key in taken:
+        key, i = f"{base}_{i}", i + 1
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO workflow_custom_statuses (key, label, after_key, terminal, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (key, label, (after_key or None), 1 if terminal else 0, _now()),
+        )
+    return {"key": key, "label": label}
+
+
+def delete_custom_status(key: str) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM workflow_custom_statuses WHERE key = ?", (key,))
+
+
+def all_workflow_statuses() -> list[tuple[str, str]]:
+    """Base pipeline with custom stages inserted after their anchor stage
+    (or just before the closed/terminal stages when no valid anchor)."""
+    result = list(WORKFLOW_STATUSES)
+    for c in list_custom_statuses():
+        entry = (c["key"], c["label"])
+        idx = next((i for i, (k, _) in enumerate(result) if k == c["after_key"]), None)
+        if idx is None:
+            term_idx = next((i for i, (k, _) in enumerate(result)
+                             if k in ("closed_won", "closed_lost")), len(result))
+            result.insert(term_idx, entry)
+        else:
+            result.insert(idx + 1, entry)
+    return result
+
+
+def all_status_label() -> dict:
+    return dict(all_workflow_statuses())
+
+
+def all_terminal() -> set:
+    s = set(WORKFLOW_TERMINAL)
+    s.update(c["key"] for c in list_custom_statuses() if c["terminal"])
+    return s
+
 # When the workflow moves INTO this status, auto-create these tasks
 # (each prefixed with "[auto]" and due N days from today).
 WORKFLOW_AUTO_TASKS: dict[str, list[dict]] = {
@@ -815,7 +882,7 @@ def transition_workflow(invoice_id: int, *, to_status: str,
                         by: str | None = None, note: str | None = None,
                         skip_auto_tasks: bool = False) -> dict:
     """Move the invoice's workflow to a new status; log history; auto-tasks."""
-    if to_status not in WORKFLOW_STATUS_LABEL:
+    if to_status not in all_status_label():
         raise ValueError(f"Unknown workflow status: {to_status!r}")
     existing = get_invoice(invoice_id)
     if not existing:
@@ -832,10 +899,11 @@ def transition_workflow(invoice_id: int, *, to_status: str,
             "VALUES (?, ?, ?, ?, ?, ?)",
             (invoice_id, from_status, to_status, now, by, note),
         )
+        terminal = all_terminal()
         closed_clause = ""
-        if to_status in WORKFLOW_TERMINAL:
+        if to_status in terminal:
             closed_clause = ", workflow_closed_at = :now"
-        elif from_status in WORKFLOW_TERMINAL:
+        elif from_status in terminal:
             closed_clause = ", workflow_closed_at = NULL"
         conn.execute(
             f"UPDATE invoices SET workflow_status = :s, updated_at = :now {closed_clause} "

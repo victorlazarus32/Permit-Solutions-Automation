@@ -876,6 +876,10 @@ def dashboard():
     # Stuck invoices — non-terminal invoices that have outstayed their threshold
     stuck_jobs = inv_mod.list_stuck_invoices(limit=10, owner=scope_owner)
 
+    # Merged workflow stages (base + admin custom) for the pipeline display.
+    # "Branch" = terminal stages + inspection_failed, shown off the main line.
+    _merged_wf = inv_mod.all_workflow_statuses()
+    _branch_wf = inv_mod.all_terminal() | {"inspection_failed"}
     return render_template(
         "dashboard.html",
         totals=totals,
@@ -891,8 +895,10 @@ def dashboard():
         lob_reason=lob_reason,
         today=dt.date.today().strftime("%A, %B %d, %Y"),
         today_iso=dt.date.today().isoformat(),
-        job_statuses=inv_mod.WORKFLOW_STATUSES,
-        job_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
+        job_statuses=_merged_wf,
+        job_status_label=dict(_merged_wf),
+        pipeline_forward=[k for k, _ in _merged_wf if k not in _branch_wf],
+        pipeline_terminal=[k for k, _ in _merged_wf if k in _branch_wf],
         pipeline_counts=pipeline_counts,
         pipeline_total=sum(pipeline_counts.values()),
         stuck_jobs=stuck_jobs,
@@ -1784,8 +1790,8 @@ def invoice_detail(invoice_id: int):
         proposal=proposal,
         permit_total=permit_total,
         permit_resolved=permit_resolved,
-        workflow_statuses=inv_mod.WORKFLOW_STATUSES,
-        workflow_status_label=inv_mod.WORKFLOW_STATUS_LABEL,
+        workflow_statuses=inv_mod.all_workflow_statuses(),
+        workflow_status_label=inv_mod.all_status_label(),
         workflow_history=inv_mod.list_workflow_history(invoice_id),
         invoice_tasks=inv_mod.list_invoice_tasks(invoice_id),
         all_users=sorted(_load_users().keys()) if is_admin() else [],
@@ -2769,7 +2775,40 @@ def sent():
 
 @app.route("/settings")
 def settings():
-    return render_template("settings.html", env=_env_status())
+    return render_template(
+        "settings.html",
+        env=_env_status(),
+        workflow_stages=inv_mod.all_workflow_statuses(),
+        custom_statuses=inv_mod.list_custom_statuses(),
+        is_admin=is_admin(),
+    )
+
+
+@app.post("/settings/workflow-stages/add")
+@require_admin
+def workflow_stage_add():
+    label = (request.form.get("label") or "").strip()
+    after_key = (request.form.get("after_key") or "").strip() or None
+    terminal = bool(request.form.get("terminal"))
+    if not label:
+        flash("Enter a stage name.", "error")
+        return redirect(url_for("settings") + "#workflow-stages")
+    try:
+        created = inv_mod.add_custom_status(label, after_key=after_key, terminal=terminal)
+        flash(f"Added workflow stage “{created['label']}”.", "success")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("settings") + "#workflow-stages")
+
+
+@app.post("/settings/workflow-stages/delete")
+@require_admin
+def workflow_stage_delete():
+    key = (request.form.get("key") or "").strip()
+    if key:
+        inv_mod.delete_custom_status(key)
+        flash("Removed the custom workflow stage. Invoices already in it keep their value until you move them.", "info")
+    return redirect(url_for("settings") + "#workflow-stages")
 
 
 # ---------------------------------------------------------------------------

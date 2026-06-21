@@ -446,6 +446,24 @@ def init_db() -> None:
         _migrate_invoices(conn)
         _migrate_violations(conn)
         _migrate_daily_runs(conn)
+        _migrate_workflow_statuses(conn)
+
+
+def _migrate_workflow_statuses(conn) -> None:
+    """Admin-defined custom workflow stages, inserted into the base pipeline.
+    Idempotent: creates the table if absent."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workflow_custom_statuses (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            key        TEXT NOT NULL UNIQUE,   -- slug, e.g. submitted_to_hoa
+            label      TEXT NOT NULL,          -- display, e.g. Submitted to HOA
+            after_key  TEXT,                   -- inserts right after this stage key
+            terminal   INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
 
 
 def _migrate_daily_runs(conn) -> None:

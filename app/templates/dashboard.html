@@ -75,8 +75,8 @@
 <h2 class="section-heading">Jobs Pipeline · <span style="color: var(--ink-mute); font-weight: 400; font-size: 0.85em;">{{ pipeline_total }} total</span></h2>
 <section class="pipeline-flow">
   <div class="pf-track">
-    {% set forward = ['intake','reviewing_documents','meet_building_reviewers','awaiting_survey','awaiting_engineer','permit_prep','submitted','review_comments','awaiting_inspection','approved'] %}
-    {% set terminal = ['inspection_failed','closed_won','closed_lost'] %}
+    {% set forward = pipeline_forward %}
+    {% set terminal = pipeline_terminal %}
 
     {% for key in forward %}
       {% set count = pipeline_counts.get(key, 0) %}
