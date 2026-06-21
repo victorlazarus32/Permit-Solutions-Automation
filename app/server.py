@@ -36,6 +36,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Deep-link base for the separate Municipal Intelligence site. Assumes it uses
+# the same /lead/<source>/<case_number> path on its own domain; override with
+# the INTELLIGENCE_BASE_URL env var if its routing differs.
+INTELLIGENCE_BASE_URL = (
+    os.environ.get("INTELLIGENCE_BASE_URL") or "https://intelligence.permitsolutions.us"
+).rstrip("/")
+
 try:
     from dotenv import load_dotenv
     load_dotenv(PROJECT_ROOT / ".env")
@@ -908,12 +915,14 @@ def lead_detail(source: str, case_number: str):
         case_invoices = invoices_for_case(source, case_number, owner=scope)
     except Exception:
         case_invoices = []
+    intelligence_url = f"{INTELLIGENCE_BASE_URL}/lead/{source}/{case_number}"
     return render_template(
         "lead_detail.html",
         v=violation,
         events=events,
         intakes=intakes,
         case_invoices=case_invoices,
+        intelligence_url=intelligence_url,
         today_iso=dt.date.today().isoformat(),
     )
 

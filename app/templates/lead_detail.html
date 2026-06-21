@@ -14,7 +14,11 @@
         {% if v.open_date %}&nbsp;·&nbsp; opened {{ v.open_date }}{% endif %}
       </p>
     </div>
-    <div class="lead-hero-actions">
+    <div class="lead-hero-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+      {% if intelligence_url %}
+        <a class="btn-secondary" href="{{ intelligence_url }}" target="_blank" rel="noopener"
+           title="Open this case in Permit Solutions Municipal Intelligence">Open in Municipal Intelligence ↗</a>
+      {% endif %}
       {% if v.lob_status %}
         <span class="status status-{{ v.lob_status|lower|replace('_','-') }}">{{ v.lob_status }}</span>
       {% else %}
