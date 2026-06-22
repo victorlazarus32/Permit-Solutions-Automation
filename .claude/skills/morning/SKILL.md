@@ -28,7 +28,10 @@ date comparisons.
    yes) — nudge him to chase, oldest first.
 4. **Pipeline at a glance** — counts by status (New / Contacted / Quoting /
    Quoted / Won / Lost) + any in-progress jobs with their stage.
-5. If nothing is overdue or due today, say so plainly.
+5. **🏦 Personal / admin reminders** — surface any items from the tracker's
+   `## Personal / Admin reminders` section that are due on/before today (bank,
+   bills, errands). These are non-client but Victor still wants them in the brief.
+6. If nothing is overdue or due today, say so plainly.
 
 End with a one-line **"Start here today: …"** recommendation (the single
 highest-value action).
