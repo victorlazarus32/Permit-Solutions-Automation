@@ -51,4 +51,7 @@ data/.app_secret
 # Private client/intake tracker — contains client PII, must stay local
 # (this repo is public). Never commit.
 *.local.md
+*.local.pdf
+*.local.html
 intake_tracker/
+briefs/
