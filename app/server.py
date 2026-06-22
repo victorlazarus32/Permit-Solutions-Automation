@@ -1642,6 +1642,9 @@ def invoices_list():
         stats=stats,
         active_status=status or "all",
         active_workflow_status=workflow_status,
+        workflow_labels=inv_mod.all_status_label(),
+        workflow_statuses=inv_mod.all_workflow_statuses(),
+        workflow_counts=inv_mod.workflow_status_counts(owner=scope_owner),
         scope_owner=scope_owner,
         all_users=sorted(_load_users().keys()) if is_admin() else [],
     )

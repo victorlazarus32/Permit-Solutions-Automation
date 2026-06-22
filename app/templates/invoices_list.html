@@ -3,6 +3,19 @@
 
 {% block content %}
 
+<style>
+  /* Workflow / job-stage badge (distinct from the payment STATUS pill) */
+  .wf { display: inline-block; padding: 2px 8px; border-radius: 999px;
+        font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;
+        white-space: nowrap; border: 1px solid transparent; }
+  .wf-progress { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }   /* in-house work — indigo */
+  .wf-city     { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }   /* with the city — amber */
+  .wf-inspect  { background: #faf5ff; color: #6b21a8; border-color: #e9d5ff; }   /* inspections — purple */
+  .wf-done     { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }   /* approved/won — green */
+  .wf-fail     { background: #fef2f2; color: #991b1b; border-color: #fecaca; }   /* failed — red */
+  .wf-lost     { background: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }   /* lost — gray */
+</style>
+
 <section class="hero">
   <div class="lead-hero-row">
     <div>
@@ -47,8 +60,24 @@
        href="{{ url_for('invoices_list') }}{% if key != 'all' %}?status={{ key }}{% endif %}{% if scope_owner and is_admin %}{% if key != 'all' %}&{% else %}?{% endif %}owner={{ scope_owner }}{% endif %}">{{ label }}</a>
   {% endfor %}
 
+  <span style="margin-left: {{ 'auto' if not (is_admin and all_users) else '0' }}; display: inline-flex; gap: 6px; align-items: center; font-size: 0.85rem;">
+    <label for="stage_filter" style="color: var(--ink-mute);">Job stage:</label>
+    <select id="stage_filter" onchange="
+      const v = this.value;
+      const params = new URLSearchParams(window.location.search);
+      params.delete('status');
+      if (v) { params.set('workflow_status', v); } else { params.delete('workflow_status'); }
+      window.location.search = params.toString();
+    " style="font-size: 0.85rem; padding: 4px 8px;">
+      <option value="">All stages</option>
+      {% for key, label in workflow_statuses %}
+        <option value="{{ key }}" {% if active_workflow_status == key %}selected{% endif %}>{{ label }}{% if workflow_counts.get(key) %} ({{ workflow_counts.get(key) }}){% endif %}</option>
+      {% endfor %}
+    </select>
+  </span>
+
   {% if is_admin and all_users %}
-  <span style="margin-left: auto; display: inline-flex; gap: 6px; align-items: center; font-size: 0.85rem;">
+  <span style="display: inline-flex; gap: 6px; align-items: center; font-size: 0.85rem;">
     <label for="owner_filter" style="color: var(--ink-mute);">Owner:</label>
     <select id="owner_filter" onchange="
       const u = this.value;
@@ -77,6 +106,7 @@
         <th class="num">Deposit</th>
         <th class="num">Balance</th>
         <th>Status</th>
+        <th>Job stage</th>
         <th></th>
       </tr>
     </thead>
@@ -116,6 +146,16 @@
         </td>
         <td><span class="status status-{{ inv.status }}">{{ inv.status|upper }}</span></td>
         <td>
+          {% set ws = inv.workflow_status or 'intake' %}
+          {% if ws in ['approved', 'closed_won'] %}{% set wfclass = 'wf-done' %}
+          {% elif ws == 'closed_lost' %}{% set wfclass = 'wf-lost' %}
+          {% elif ws == 'inspection_failed' %}{% set wfclass = 'wf-fail' %}
+          {% elif ws in ['submitted', 'review_comments'] %}{% set wfclass = 'wf-city' %}
+          {% elif ws == 'awaiting_inspection' %}{% set wfclass = 'wf-inspect' %}
+          {% else %}{% set wfclass = 'wf-progress' %}{% endif %}
+          <span class="wf {{ wfclass }}">{{ workflow_labels.get(ws, ws) }}</span>
+        </td>
+        <td>
           <a class="btn-link" href="{{ url_for('invoice_detail', invoice_id=inv.id) }}">View</a>
         </td>
       </tr>
@@ -127,7 +167,7 @@
         <td class="num">${{ '{:,.2f}'.format(invoices|sum(attribute='total')) }}</td>
         <td class="num">${{ '{:,.2f}'.format(invoices|sum(attribute='deposit_amount')) }}</td>
         <td class="num"><strong>${{ '{:,.2f}'.format(invoices|sum(attribute='balance_due')) }}</strong></td>
-        <td colspan="2"></td>
+        <td colspan="3"></td>
       </tr>
     </tfoot>
   </table>
