@@ -47,3 +47,8 @@ logs/
 # Local user accounts and session secret (never commit)
 data/users.json
 data/.app_secret
+
+# Private client/intake tracker — contains client PII, must stay local
+# (this repo is public). Never commit.
+*.local.md
+intake_tracker/
