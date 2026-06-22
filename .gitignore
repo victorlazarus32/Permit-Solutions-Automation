@@ -55,3 +55,4 @@ data/.app_secret
 *.local.html
 intake_tracker/
 briefs/
+client_docs/
