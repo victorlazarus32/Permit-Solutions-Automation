@@ -150,7 +150,7 @@
           {% if ws in ['approved', 'closed_won'] %}{% set wfclass = 'wf-done' %}
           {% elif ws == 'closed_lost' %}{% set wfclass = 'wf-lost' %}
           {% elif ws == 'inspection_failed' %}{% set wfclass = 'wf-fail' %}
-          {% elif ws in ['submitted', 'review_comments'] %}{% set wfclass = 'wf-city' %}
+          {% elif ws in ['submitted', 'review_comments', 'submitted_to_hoa'] %}{% set wfclass = 'wf-city' %}
           {% elif ws == 'awaiting_inspection' %}{% set wfclass = 'wf-inspect' %}
           {% else %}{% set wfclass = 'wf-progress' %}{% endif %}
           <span class="wf {{ wfclass }}">{{ workflow_labels.get(ws, ws) }}</span>

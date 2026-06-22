@@ -48,6 +48,7 @@ WORKFLOW_STATUSES: list[tuple[str, str]] = [
     ("awaiting_survey",     "Awaiting Survey"),
     ("awaiting_engineer",   "Awaiting Engineer"),
     ("permit_prep",         "Permit Prep"),
+    ("submitted_to_hoa",    "Submitted to HOA"),
     ("submitted",           "Submitted"),
     ("review_comments",     "Review Comments"),
     ("awaiting_inspection", "Awaiting Inspection"),
