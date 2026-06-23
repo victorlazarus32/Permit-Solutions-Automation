@@ -16,6 +16,8 @@
       <h1>{% if is_edit %}Edit invoice{% else %}New invoice{% endif %}</h1>
       {% if p.case_number %}
       <p class="hero-sub">Prefilled from case <span class="mono">{{ p.case_number }}</span></p>
+      {% elif p.line_items %}
+      <p class="hero-sub">Prefilled from a proposal — review and click <strong>Save</strong> to log it to the dashboard.</p>
       {% endif %}
     </div>
   </div>
@@ -27,6 +29,7 @@
   {% if not is_edit and p.source %}<input type="hidden" name="source" value="{{ p.source }}">{% endif %}
   {% if not is_edit and p.case_number %}<input type="hidden" name="case_number" value="{{ p.case_number }}">{% endif %}
   {% if not is_edit and p.contract_event_id %}<input type="hidden" name="contract_event_id" value="{{ p.contract_event_id }}">{% endif %}
+  {% if not is_edit and p.workflow_status %}<input type="hidden" name="workflow_status" value="{{ p.workflow_status }}">{% endif %}
 
   <h3 class="lead-card-title">Property</h3>
   <div class="form-row single">
@@ -138,7 +141,9 @@
     </datalist>
     <tbody>
       {% set rows_to_render = invoice_line_items if is_edit else [] %}
-      {% if not is_edit and p.suggested_amount %}
+      {% if not is_edit and p.line_items %}
+        {% set rows_to_render = p.line_items %}
+      {% elif not is_edit and p.suggested_amount %}
         {% set rows_to_render = [{'description': p.suggested_description, 'quantity': 1, 'unit_price': p.suggested_amount, 'amount': p.suggested_amount}] %}
       {% endif %}
       {% if rows_to_render %}
@@ -375,7 +380,7 @@
     <div class="form-field">
       <label for="scope_of_services">Scope of Services (assembled — you can edit before saving)</label>
       <textarea name="scope_of_services" id="scope_of_services" rows="10"
-                placeholder="Click Generate Preview above to assemble from selected modules, or type your own scope.">{{ invoice.scope_of_services if is_edit and invoice.scope_of_services else '' }}</textarea>
+                placeholder="Click Generate Preview above to assemble from selected modules, or type your own scope.">{{ invoice.scope_of_services if is_edit and invoice.scope_of_services else (p.scope_of_services or '') }}</textarea>
     </div>
   </div>
 

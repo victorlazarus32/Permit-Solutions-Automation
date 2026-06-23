@@ -1650,6 +1650,32 @@ def invoices_list():
     )
 
 
+def _prefill_from_query(args) -> dict:
+    """Build an invoice prefill dict from query params, so a link can pre-load a
+    pre-built proposal (client, property, line items, scope, workflow stage) and
+    log it to the dashboard in one click. Line items are repeated `li` params
+    shaped `description|amount` (quantity assumed 1)."""
+    keys = ["client_name", "client_address", "client_city", "client_state", "client_zip",
+            "client_email", "client_phone", "property_address", "property_city",
+            "property_state", "property_zip", "permit_number", "case_number", "source",
+            "scope_of_services", "client_summary", "workflow_status"]
+    g = {k: v for k in keys if (v := (args.get(k) or "").strip())}
+    items = []
+    for raw in args.getlist("li"):
+        desc, sep, amt = raw.rpartition("|")
+        if not sep:
+            continue
+        try:
+            amt = float(amt)
+        except ValueError:
+            continue
+        items.append({"description": desc.strip(), "quantity": 1,
+                      "unit_price": amt, "amount": amt})
+    if items:
+        g["line_items"] = items
+    return g
+
+
 @app.route("/invoices/new", methods=["GET", "POST"])
 def invoice_new():
     if request.method == "POST":
@@ -1704,6 +1730,16 @@ def invoice_new():
             flash(f"Could not create invoice: {e}", "error")
             return redirect(request.url)
 
+        # Optional: land the new invoice at a specific workflow stage (used by
+        # prefill links that log a proposal already sent to the client).
+        ws = (f.get("workflow_status") or "").strip()
+        if ws:
+            try:
+                inv_mod.transition_workflow(inv["id"], to_status=ws,
+                                            by=current_user(), note="Set from prefill link")
+            except Exception:
+                pass
+
         flash(f"Created draft invoice {inv['invoice_number']}.", "success")
         return redirect(url_for("invoice_detail", invoice_id=inv["id"]))
 
@@ -1742,6 +1778,10 @@ def invoice_new():
                 flash(f"No Property Appraiser record for folio {pa_folio}.", "warning")
         except Exception as e:
             flash(f"PA lookup failed for folio {pa_folio}: {e}", "error")
+    # Generic link-based prefill (log a pre-built proposal), only when not
+    # already prefilled from a case or folio.
+    if not prefill:
+        prefill = _prefill_from_query(request.args)
     return render_template(
         "invoice_form.html",
         prefill=prefill,
