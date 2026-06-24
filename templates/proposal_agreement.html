@@ -138,7 +138,7 @@
   </div>
   <hr class="accent">
 
-  <div class="doc-title">Expired Permit Close-Out Proposal and Service Agreement</div>
+  <div class="doc-title">{% if is_custom %}{{ doc_title }}{% else %}Expired Permit Close-Out Proposal and Service Agreement{% endif %}</div>
   {% if subtitle %}<div class="doc-sub">{{ subtitle }}</div>{% endif %}
 
   <div class="meta-row">
@@ -152,17 +152,33 @@
     </div>
   </div>
 
+  {% if is_custom %}
+  <p class="lead">{{ intro }}</p>
+  {% else %}
   <p class="lead">Thank you for the opportunity. This agreement sets out our flat-fee services to identify,
   reopen, and close out the expired permits listed below for the {{ 'properties' if properties|length > 1 else 'property' }}
   shown. We handle the entire process with the county from start to finish, and you receive written
   confirmation as each permit is closed. {% if permit_count %}In total there {{ 'is' if permit_count == 1 else 'are' }}
   <strong>{{ permit_count }} expired permit{{ '' if permit_count == 1 else 's' }}</strong> to resolve.{% endif %}
   {% if intro_extra %}{{ intro_extra }}{% endif %}</p>
+  {% endif %}
 
   <div class="cols">
     <div class="col left">
       <div class="section-heading" style="margin-top: 4pt;">Pricing</div>
       <div class="price-box">
+        {% if is_custom %}
+        <div class="price-line">
+          <span class="desc">Professional service fee (full scope below)</span>
+          <span class="amt">{{ total_display }}</span>
+        </div>
+        <div class="price-line total">
+          <span class="desc">Total service fee</span>
+          <span class="amt">{{ total_display }}</span>
+        </div>
+        <div class="box-note">Itemized by service in the Scope of Work and Fee section below.
+        {{ jurisdiction }} permit fees and third-party costs are billed separately at cost.</div>
+        {% else %}
         <div class="price-line">
           <span class="desc">Standard rate per expired permit</span>
           <span class="amt">{{ standard_rate_display }}</span>
@@ -179,6 +195,7 @@
           <span class="desc">Total service fee</span>
           <span class="amt">{{ total_display }}</span>
         </div>
+        {% endif %}
       </div>
     </div>
     <div class="col right">
@@ -192,16 +209,17 @@
           <span class="desc">Balance on completion ({{ 100 - deposit_pct }}%)</span>
           <span class="amt">{{ balance_display }}</span>
         </div>
-        <div class="box-note"><strong>Balance Due.</strong> The remaining balance is due upon written
+        <div class="box-note"><strong>Balance Due.</strong> {% if is_custom %}{{ balance_note }}{% else %}The remaining balance is due upon written
         confirmation that all expired permits listed in this Agreement have been closed, administratively
-        cleared, or otherwise resolved with Miami-Dade County.</div>
+        cleared, or otherwise resolved with Miami-Dade County.{% endif %}</div>
       </div>
     </div>
   </div>
 
   <div class="clause">
     <div class="section-heading">Payment Methods</div>
-    <p>Permit Solutions Services accepts payment by company check, Zelle, and credit card. Payments made by
+    <p>Permit Solutions Services accepts payment by company check, Zelle, and credit card. Zelle payments may be
+    sent to invoice@permitsolutions.us. Payments made by
     credit card will include a 1.5% credit card processing surcharge. This surcharge applies only to credit
     card payments and does not apply to payments made by check or Zelle. Client agrees that all payment
     obligations under this proposal remain due regardless of the payment method selected.</p>
@@ -217,6 +235,54 @@
     incurred.</p>
   </div>
 
+  {% if is_custom %}
+  <div class="section-heading">Scope of Work and Fee</div>
+  <div class="prop-block">
+    {% if scope_property_head %}<div class="prop-head">{{ scope_property_head }}</div>{% endif %}
+    {% if property_line %}<div class="prop-sub">{{ property_line }}</div>{% endif %}
+    <table class="permits">
+      <thead>
+        <tr><th>Service</th><th class="amt" style="width: 16%;">Fee</th></tr>
+      </thead>
+      <tbody>
+        {% for it in scope_items %}
+        <tr><td>{{ it.service }}</td><td class="amt">{{ it.fee_display }}</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td>Total professional service fee</td><td class="amt" style="color: #c2410c;">{{ total_display }}</td></tr>
+      </tfoot>
+    </table>
+    {% if scope_footnote %}<div class="footnote">{{ scope_footnote }}</div>{% endif %}
+  </div>
+
+  {% if conditions %}
+  <div class="clause" style="border-left: 2.5pt solid #c2410c; background: #fff7ed; padding: 7pt 11pt; margin-top: 9pt;">
+    <div style="font-size: 7pt; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #c2410c; margin-bottom: 4pt;">Conditions &amp; Assumptions</div>
+    <ul class="work" style="margin: 0; font-size: 8.7pt;">
+      {% for c in conditions %}<li>{{ c }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% for cl in extra_clauses %}
+  <div class="clause">
+    <div class="section-heading">{{ cl.heading }}</div>
+    <p>{{ cl.body }}</p>
+  </div>
+  {% endfor %}
+
+  <div class="section-heading">Scope Limitations and Unknown Conditions</div>
+  <p>{{ scope_limitations_intro }}</p>
+  {% if exclusions %}
+  <ul class="excl">
+    {% for e in exclusions %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if trade_note %}
+  <p style="margin-top: 6pt;"><strong>Physical Work Not Included.</strong> {{ trade_note }}</p>
+  {% endif %}
+  {% else %}
   <div class="section-heading">What Is Included For Each Permit</div>
   <p>Each permit is worked individually. The county cannot pull older permits by expiration date, so every one
   is chased by its application reference. For each permit we:</p>
@@ -259,14 +325,15 @@
   not perform licensed electrical, mechanical, fire alarm, building, or repair work under this Agreement. If
   any licensed trade work is required, Client must hire the appropriate licensed contractor under a separate
   agreement.</p>
+  {% endif %}
 
   <div class="clause">
-    <div class="section-heading">No Guarantee of County Action</div>
-    <p>Permit Solutions Services will use commercially reasonable efforts to pursue closure of the permits
+    <div class="section-heading">{% if is_custom %}No Guarantee of Approval{% else %}No Guarantee of County Action{% endif %}</div>
+    <p>{% if is_custom %}{{ no_guarantee_body }}{% else %}Permit Solutions Services will use commercially reasonable efforts to pursue closure of the permits
     listed in this proposal. Final approval, inspection results, administrative closure, permit renewal, and
     close-out decisions are made solely by Miami-Dade County and/or the applicable reviewing department.
     Permit Solutions Services cannot guarantee a specific approval date, inspection result, processing time, or
-    county determination.</p>
+    county determination.{% endif %}</p>
   </div>
 
   <div class="clause">
@@ -279,13 +346,14 @@
   </div>
 
   <div class="clause">
-    <div class="section-heading">Authorization to Communicate with Miami-Dade County</div>
-    <p>Client authorizes Permit Solutions Services and Victor L. Moreno to communicate with Miami-Dade County
+    <div class="section-heading">{% if is_custom %}Authorization to Communicate{% else %}Authorization to Communicate with Miami-Dade County{% endif %}</div>
+    <p>{% if is_custom %}{{ authorization_body }}{% else %}Client authorizes Permit Solutions Services and Victor L. Moreno to communicate with Miami-Dade County
     departments, request permit records, retrieve archived files, submit close-out documentation, schedule
     inspections, and coordinate with county personnel regarding the permits listed in this proposal. Client
-    agrees to sign any county-required authorization form if requested.</p>
+    agrees to sign any county-required authorization form if requested.{% endif %}</p>
   </div>
 
+  {% if not is_custom %}
   <div class="section-heading">Permits Covered By This Proposal</div>
 
   {% for prop in properties %}
@@ -342,6 +410,7 @@
     <p>{{ active_excluded_clause }}</p>
   </div>
   {% endif %}
+  {% endif %}
 
   <div class="clause">
     <div class="section-heading">Cancellation and Deposit</div>
@@ -361,9 +430,9 @@
 
   <div class="sig-block">
     <div class="section-heading">Acceptance of Proposal</div>
-    <p>By signing below, Client authorizes Permit Solutions Services to begin work on the expired permit
+    <p>{% if is_custom %}{{ acceptance_body }}{% else %}By signing below, Client authorizes Permit Solutions Services to begin work on the expired permit
     close-out services described in this proposal and agrees to the pricing, payment terms, exclusions,
-    limitations, and conditions stated herein.</p>
+    limitations, and conditions stated herein.{% endif %}</p>
 
     <div class="accepted">Accepted and agreed:</div>
 

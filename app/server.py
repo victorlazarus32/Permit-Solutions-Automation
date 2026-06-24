@@ -1526,6 +1526,8 @@ def _build_proposal_context(data: dict) -> dict:
         }
     Returns the Jinja context, plus private _total/_deposit/_balance numbers
     the invoice side uses."""
+    if (data.get("mode") == "custom") or data.get("line_items"):
+        return _build_custom_proposal_context(data)
     fee = float(data.get("fee_per_permit") or 0)
     standard_rate = float(data.get("standard_rate") or 1250)
     deposit_pct = int(data.get("deposit_pct") or 50)
@@ -1573,6 +1575,118 @@ def _build_proposal_context(data: dict) -> dict:
         "properties": properties,
         "active_excluded": data.get("active_excluded") or "",
         "active_excluded_clause": data.get("active_excluded_clause") or "",
+        "validity_days": int(data.get("validity_days") or 15),
+        "is_custom": False,
+        "_total": total,
+        "_deposit": deposit,
+        "_balance": balance,
+    }
+
+
+def _build_custom_proposal_context(data: dict) -> dict:
+    """Context for a flat-fee, itemized (non-close-out) proposal — e.g. an
+    after-the-fact permit, a zoning variance, a fence packet, etc. The total is
+    the sum of the explicit ``line_items`` rather than permit_count * fee, and
+    every narrative block can be supplied by the seed (with sensible defaults).
+
+    Custom seed shape (mode: "custom"):
+        {
+          "mode": "custom", "client_name": str, "prepared_for": str,
+          "doc_title": str, "subtitle": str, "jurisdiction": str,
+          "authority": str|None, "intro": str, "deposit_pct": int,
+          "validity_days": int, "property_address": str,
+          "scope_property_head": str, "property_line": str,
+          "line_items": [{"service": str, "fee": num}, ...],
+          "scope_footnote": str, "conditions": [str, ...],
+          "extra_clauses": [{"heading": str, "body": str}, ...],
+          "exclusions": [str, ...], "scope_limitations_intro": str,
+          "trade_note": str, "balance_note": str, "no_guarantee_body": str,
+          "authorization_body": str, "acceptance_body": str,
+          "scope_summary": str, "balance_terms": str, "workflow_start": str
+        }
+    """
+    deposit_pct = int(data.get("deposit_pct") or 50)
+    jurisdiction = (data.get("jurisdiction") or "Miami-Dade County").strip()
+    authority = (data.get("authority") or jurisdiction).strip()
+
+    items, total = [], 0.0
+    for it in (data.get("line_items") or []):
+        amt = it.get("fee")
+        if amt is None:
+            amt = it.get("amount")
+        if amt is None:
+            amt = it.get("unit_price")
+        amt = float(amt or 0)
+        total += amt
+        items.append({
+            "service": it.get("service") or it.get("description") or "",
+            "fee_display": _usd(amt),
+        })
+    deposit = round(total * deposit_pct / 100.0, 2)
+    balance = round(total - deposit, 2)
+
+    date_display = data.get("date_display")
+    if not date_display:
+        d = dt.date.today()
+        date_display = f"{d.strftime('%B')} {d.day}, {d.year}"
+
+    extra = [
+        {"heading": cl["heading"], "body": cl["body"]}
+        for cl in (data.get("extra_clauses") or [])
+        if cl.get("heading") and cl.get("body")
+    ]
+
+    return {
+        "logo_src": (PROJECT_ROOT / "logos" / "ps-squared-mark-800.png").as_uri(),
+        "is_custom": True,
+        "doc_title": data.get("doc_title") or "Proposal and Service Agreement",
+        "subtitle": data.get("subtitle") or "",
+        "prepared_for": data.get("prepared_for") or data.get("client_name") or "",
+        "date_display": date_display,
+        "intro": data.get("intro") or "",
+        "jurisdiction": jurisdiction,
+        "total_display": _usd(total),
+        "deposit_display": _usd(deposit),
+        "balance_display": _usd(balance),
+        "deposit_pct": deposit_pct,
+        "scope_property_head": data.get("scope_property_head") or "",
+        "property_line": data.get("property_line") or "",
+        "scope_items": items,
+        "scope_footnote": data.get("scope_footnote") or "",
+        "conditions": data.get("conditions") or [],
+        "extra_clauses": extra,
+        "exclusions": data.get("exclusions") or [],
+        "scope_limitations_intro": data.get("scope_limitations_intro") or (
+            "This proposal is based on the information currently available. Additional requirements "
+            "may be discovered only after the application is submitted and the reviewing department "
+            "evaluates it. If work is required beyond the scope above, it is outside the flat fee and "
+            "will require separate written approval from Client. Examples of excluded work include, "
+            "but are not limited to:"
+        ),
+        "trade_note": data.get("trade_note") or "",
+        "balance_note": data.get("balance_note") or (
+            f"The remaining balance is due upon written confirmation that the work described in this "
+            f"Agreement has been completed, closed, administratively cleared, or otherwise resolved "
+            f"with {jurisdiction}."
+        ),
+        "no_guarantee_body": data.get("no_guarantee_body") or (
+            f"Permit Solutions Services will use commercially reasonable efforts to pursue the permits, "
+            f"approvals, and items listed in this proposal. Final approval, inspection results, "
+            f"administrative closure, and case-closure decisions are made solely by {authority}. Permit "
+            f"Solutions Services cannot guarantee a specific approval date, inspection result, "
+            f"processing time, or determination."
+        ),
+        "authorization_body": data.get("authorization_body") or (
+            f"Client authorizes Permit Solutions Services and Victor L. Moreno to communicate with "
+            f"{jurisdiction}, request permit and case records, submit applications and supporting "
+            f"documentation, schedule inspections, and coordinate with personnel regarding the matters "
+            f"listed in this proposal. Client agrees to sign any required authorization form if requested."
+        ),
+        "acceptance_body": data.get("acceptance_body") or (
+            "By signing below, Client authorizes Permit Solutions Services to begin work on the services "
+            "described in this proposal and agrees to the pricing, payment terms, exclusions, limitations, "
+            "and conditions stated herein."
+        ),
         "validity_days": int(data.get("validity_days") or 15),
         "_total": total,
         "_deposit": deposit,
@@ -2103,14 +2217,6 @@ def proposal_new():
             return redirect(request.url)
 
         ctx = _build_proposal_context(data)
-        permit_count = ctx["permit_count"]
-        fee = float(data.get("fee_per_permit") or 0)
-        if permit_count == 0 or fee <= 0:
-            flash("Add at least one permit and a fee per permit.", "error")
-            return redirect(request.url)
-
-        props = data.get("properties") or []
-        first_addr = (props[0].get("address") if props else None) or None
 
         if is_admin():
             chosen_owner = (data.get("owner") or "").strip().lower() or current_user()
@@ -2119,15 +2225,51 @@ def proposal_new():
         else:
             chosen_owner = current_user()
 
-        line_items = [{
-            "description": (
-                f"Expired permit close-out, Miami-Dade County — {permit_count} expired "
-                f"permit{'' if permit_count == 1 else 's'}"
-                + (f" at {first_addr}" if first_addr else "")
-            ),
-            "quantity": permit_count,
-            "unit_price": fee,
-        }]
+        if ctx.get("is_custom"):
+            raw_items = data.get("line_items") or []
+            if not raw_items or ctx["_total"] <= 0:
+                flash("Add at least one line item with a fee.", "error")
+                return redirect(request.url)
+            line_items = []
+            for it in raw_items:
+                amt = it.get("fee")
+                if amt is None:
+                    amt = it.get("amount")
+                if amt is None:
+                    amt = it.get("unit_price")
+                line_items.append({
+                    "description": (it.get("service") or it.get("description") or "Service"),
+                    "quantity": 1,
+                    "unit_price": float(amt or 0),
+                })
+            first_addr = (data.get("property_address") or "").strip() or None
+            scope_text = (data.get("scope_summary") or "").strip() or ctx["doc_title"]
+            terms = (
+                f"{ctx['deposit_pct']}% deposit to begin. "
+                + ((data.get("balance_terms") or "").strip() or ctx["balance_note"])
+            )
+        else:
+            permit_count = ctx["permit_count"]
+            fee = float(data.get("fee_per_permit") or 0)
+            if permit_count == 0 or fee <= 0:
+                flash("Add at least one permit and a fee per permit.", "error")
+                return redirect(request.url)
+            props = data.get("properties") or []
+            first_addr = (props[0].get("address") if props else None) or None
+            line_items = [{
+                "description": (
+                    f"Expired permit close-out, Miami-Dade County — {permit_count} expired "
+                    f"permit{'' if permit_count == 1 else 's'}"
+                    + (f" at {first_addr}" if first_addr else "")
+                ),
+                "quantity": permit_count,
+                "unit_price": fee,
+            }]
+            scope_text = _proposal_scope_text(ctx, data)
+            terms = (
+                f"{ctx['deposit_pct']}% deposit to begin. Balance due upon closure of all "
+                f"expired permits with Miami-Dade County."
+            )
 
         try:
             inv = inv_mod.create_invoice(
@@ -2135,11 +2277,8 @@ def proposal_new():
                 property_address=first_addr,
                 line_items=line_items,
                 deposit_amount=ctx["_deposit"],
-                scope_of_services=_proposal_scope_text(ctx, data),
-                terms=(
-                    f"{ctx['deposit_pct']}% deposit to begin. Balance due upon closure of all "
-                    f"expired permits with Miami-Dade County."
-                ),
+                scope_of_services=scope_text,
+                terms=terms,
                 owner=chosen_owner,
             )
         except ValueError as e:
@@ -2148,10 +2287,11 @@ def proposal_new():
 
         inv_mod.set_proposal_data(inv["id"], data)
 
-        if (data.get("workflow_start") or "").strip() == "reviewing_documents":
+        ws = (data.get("workflow_start") or "").strip()
+        if ws:
             try:
                 inv_mod.transition_workflow(
-                    inv["id"], to_status="reviewing_documents",
+                    inv["id"], to_status=ws,
                     by=current_user(), note="Created from proposal generator",
                 )
             except Exception:

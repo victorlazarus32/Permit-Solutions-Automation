@@ -12,9 +12,47 @@
   </div>
 </section>
 
+{% set custom = prefill_obj and prefill_obj.get('mode') == 'custom' %}
 <form method="POST" id="proposal-form" style="max-width: 1000px;">
   <input type="hidden" name="proposal_json" id="proposal_json">
 
+  {% if custom %}
+  <div class="lead-card" style="margin-bottom: 1rem;">
+    <h3 class="lead-card-title">Review &amp; generate</h3>
+    <p style="color: var(--ink-mute); font-size: 0.9rem; margin-top: 0;">
+      Custom (flat-fee) proposal, pre-filled from a saved seed. Review the summary, then generate the
+      branded proposal PDF and its linked invoice.
+    </p>
+    <p style="margin: 0.2rem 0;"><strong>{{ prefill_obj.get('doc_title') or 'Proposal' }}</strong></p>
+    <p style="margin: 0.2rem 0;"><strong>Client:</strong> {{ prefill_obj.get('client_name') or prefill_obj.get('prepared_for') }}</p>
+    {% if prefill_obj.get('property_address') %}<p style="margin: 0.2rem 0;"><strong>Property:</strong> {{ prefill_obj.get('property_address') }}</p>{% endif %}
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 0.6rem;">
+      <thead>
+        <tr style="text-align: left; color: var(--ink-mute); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;">
+          <th style="padding: 4px;">Service</th><th style="padding: 4px; width: 18%; text-align: right;">Fee</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(total=0) %}
+        {% for it in prefill_obj.get('line_items') or [] %}
+        {% set fee = it.get('fee') if it.get('fee') is not none else (it.get('amount') if it.get('amount') is not none else it.get('unit_price') or 0) %}
+        {% set ns.total = ns.total + (fee | float) %}
+        <tr>
+          <td style="padding: 4px; border-top: 1px solid var(--border);">{{ it.get('service') or it.get('description') }}</td>
+          <td style="padding: 4px; border-top: 1px solid var(--border); text-align: right;">${{ '{:,.0f}'.format(fee | float) }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td style="padding: 6px 4px; font-weight: 700; border-top: 2px solid var(--ink);">Total &middot; {{ prefill_obj.get('deposit_pct') or 50 }}% deposit</td>
+          <td style="padding: 6px 4px; font-weight: 700; border-top: 2px solid var(--ink); text-align: right; color: #c2410c;">${{ '{:,.0f}'.format(ns.total) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="lead-card" style="margin-bottom: 1rem; display: flex; justify-content: flex-end;">
+    <button type="submit" class="btn-primary">Generate proposal + invoice</button>
+  </div>
+  {% else %}
   <!-- ===== Quick fill: dictate / describe ===== -->
   <div class="lead-card" style="margin-bottom: 1rem;">
     <h3 class="lead-card-title">Quick fill</h3>
@@ -116,8 +154,15 @@
     </div>
     <button type="submit" class="btn-primary" id="submit_btn">Generate proposal + invoice</button>
   </div>
+  {% endif %}
 </form>
 
+{% if custom %}
+<script>
+  // Custom seed: post the seed JSON exactly as saved (the close-out form/JS is skipped).
+  document.getElementById('proposal_json').value = JSON.stringify({{ prefill_obj|tojson }});
+</script>
+{% else %}
 <template id="prop-template">
   <div class="prop card" style="border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; margin-top: 0.75rem;">
     <div class="form-row">
@@ -343,4 +388,5 @@
   })();
 })();
 </script>
+{% endif %}
 {% endblock %}

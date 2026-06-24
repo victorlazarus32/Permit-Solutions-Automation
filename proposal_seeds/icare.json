@@ -1,0 +1,60 @@
+{
+  "mode": "custom",
+  "client_name": "I Care Management Solutions LLC",
+  "prepared_for": "I Care Management Solutions LLC  •  Owner of Record",
+  "doc_title": "After-the-Fact Permit and Code Violation Resolution Proposal and Service Agreement",
+  "subtitle": "Existing rear aluminum patio (terrace) cover — building permit, zoning variance & electrical permit • 1057 SE 23 Terrace, Homestead, FL 33035 • City of Homestead Case CC-26-01568-NOV",
+  "jurisdiction": "the City of Homestead",
+  "authority": "the City of Homestead",
+  "deposit_pct": 50,
+  "validity_days": 15,
+  "workflow_start": "provide_quote",
+  "property_address": "1057 SE 23 Terrace, Homestead, FL 33035",
+  "scope_property_head": "1057 SE 23 Terrace — Existing Rear Aluminum Patio (Terrace) Cover",
+  "property_line": "Folio 10-7921-029-1730 • Owner of record: I Care Management Solutions LLC • City of Homestead after-the-fact building permit, zoning variance & electrical permit • Code Compliance Case CC-26-01568-NOV",
+  "intro": "Thank you for the opportunity. This agreement sets out our services to legalize the existing aluminum patio (terrace) cover at the rear of 1057 SE 23 Terrace through an after-the-fact building permit with the City of Homestead, and to resolve the related Code Compliance case CC-26-01568-NOV. Because the existing cover encroaches the required setback, this scope includes a zoning variance to permit it in place, and an electrical permit for the cover's existing fans and lighting. We handle the entire process from start to finish — coordinating with City of Homestead Code Compliance, preparing the after-the-fact building, variance, and electrical applications and owner documentation, arranging the signed-and-sealed engineering and product-approval package required for the existing structure, submitting to the Building and Zoning departments, presenting the variance, resolving plan-review comments, and coordinating inspections through final — and you receive written confirmation as the permits reach a closed (finaled) status and the violation case is cleared.",
+  "line_items": [
+    {"service": "Code Compliance case management — coordination with City of Homestead Code Compliance on Case CC-26-01568-NOV, status reporting, and request for compliance time while the permits and variance are processed", "fee": 700},
+    {"service": "After-the-fact building permit application prepared owner-builder — owner's authorization, owner-builder affidavit, letter of explanation, and notary coordination", "fee": 700},
+    {"service": "Survey review and coordination of the signed-and-sealed engineering as-built drawings for the existing aluminum cover (engineer's fee billed separately at cost)", "fee": 900},
+    {"service": "Product approval (NOA) and wind-load documentation packet for the aluminum roof / cover system", "fee": 500},
+    {"service": "Zoning variance — application, justification statement, required notices, and hearing coordination/presentation to permit the existing cover in place at its current setback", "fee": 1200},
+    {"service": "Electrical permit for the existing fans and lighting under the cover — application, documentation, and coordination through the electrical inspection", "fee": 700},
+    {"service": "Permit submittal to the City of Homestead Building & Zoning departments and resolution of plan-review comments and resubmittals", "fee": 500},
+    {"service": "Inspection scheduling and coordination through final (building & electrical), and obtaining the Certificate of Completion", "fee": 400}
+  ],
+  "scope_footnote": "Any other open or expired permit, or any separate structure or trade work on this property unrelated to the aluminum patio cover, is not included above and can be added by written change order if requested.",
+  "conditions": [
+    "This agreement covers the permitting, engineering coordination, and processing work only. Bringing the existing cover into compliance with current code may require physical modification, reinforcement, or replacement of components, which is separate and performed by the appropriate licensed contractor.",
+    "Because this is an after-the-fact (existing) structure, the City and the engineer of record will evaluate it against the current Florida Building Code and wind-load requirements. The City may require corrections, additional anchorage, or upgraded components before the permit can be finaled.",
+    "This after-the-fact permit is pulled owner-builder — the owner, through its authorized representative, signs the application and owner-builder affidavit and assumes responsibility for the work. No aluminum or specialty contractor of record is required. The electrical permit may require a licensed electrical contractor depending on the City's owner-builder policy for electrical work; if so, the electrician's charges are billed separately at cost.",
+    "The variance is decided by the City of Homestead at a public hearing and is not guaranteed. We prepare, submit, and present the strongest case to permit the cover in place, but approval, conditions, and timing are at the City's sole discretion. A variance typically adds several months to the timeline. If the variance is denied, the cover may have to be modified or removed to comply — that corrective work is separate and not included in this fee.",
+    "Pricing assumes the aluminum cover is eligible for after-the-fact permitting and that the structure can be documented and engineered as built or with reasonable corrections. It does not assume a guaranteed approval if the City requires removal."
+  ],
+  "extra_clauses": [
+    {
+      "heading": "Code Enforcement Fines and Liens Excluded",
+      "body": "Any accrued code-enforcement fines, daily penalties, recorded lien, interest, or collection costs associated with Case CC-26-01568-NOV or the property are the sole responsibility of the Owner and are expressly excluded from this Agreement. Permit Solutions Services is engaged to legalize the structure and pursue closure of the violation case through permitting; settling, paying, reducing, or releasing any fine or lien is the Owner's responsibility and is not part of the service fee or scope of work."
+    }
+  ],
+  "scope_limitations_intro": "This proposal is based on the permit, property, and case information currently available. Additional requirements may be discovered only after the engineer evaluates the existing cover and the City of Homestead reviews the after-the-fact and variance applications. If the City or the engineer of record determines that work is required beyond permit preparation, engineering coordination, product-approval documentation, the variance, submittal, comment resolution, and inspection coordination, that work is outside the flat fee and will require separate written approval from Client. Examples of excluded work include, but are not limited to:",
+  "exclusions": [
+    "Engineering repair or retrofit design",
+    "New plans or plan revisions beyond the as-built set",
+    "Structural, anchorage, or footing corrections",
+    "Aluminum frame, roof panel, or gutter replacement",
+    "Electrical corrections beyond the permit itself",
+    "Contractor repair or replacement work",
+    "Re-design to meet current wind-load code",
+    "Partial or full removal of the cover if required",
+    "Separate permits for unrelated work",
+    "Work required because of inspection failure"
+  ],
+  "trade_note": "The service fee covers the permitting and processing work described above. It does not include the physical aluminum, structural, or electrical work itself. Because the building permit is pulled owner-builder, any corrective or repair work required to pass inspection is the Owner's responsibility, whether performed by the Owner or by a contractor the Owner engages, and is not part of this service fee.",
+  "balance_note": "The remaining balance is due upon written confirmation that the after-the-fact permit has been finaled and the Code Compliance case has been closed, administratively cleared, or otherwise resolved with the City of Homestead.",
+  "no_guarantee_body": "Permit Solutions Services will use commercially reasonable efforts to pursue the after-the-fact permit, the zoning variance, the electrical permit, and closure of the violation case and items listed in this proposal. Final approval, the variance decision, inspection results, administrative closure, and case-closure decisions are made solely by the City of Homestead and/or the applicable reviewing department. Permit Solutions Services cannot guarantee a specific approval date, variance outcome, inspection result, processing time, or city determination, including whether the structure may be approved as built.",
+  "authorization_body": "Client authorizes Permit Solutions Services and Victor L. Moreno to communicate with the City of Homestead Building Department, Zoning Division, and Code Compliance Division, request permit and case records, submit the after-the-fact building permit, zoning variance, and electrical permit applications and supporting documentation, process the owner-builder permit affidavit, appear at and present the variance hearing, schedule inspections, and coordinate with city personnel regarding the permits, variance, and Case CC-26-01568-NOV listed in this proposal. Client agrees to sign any city-required authorization form if requested.",
+  "acceptance_body": "By signing below, Client authorizes Permit Solutions Services to begin work on the after-the-fact permit, zoning variance, electrical permit, and violation resolution services described in this proposal and agrees to the pricing, payment terms, exclusions, limitations, and conditions stated herein.",
+  "scope_summary": "Legalize the existing rear aluminum patio (terrace) cover via after-the-fact building permit with the City of Homestead, including a zoning variance to permit it in place and an electrical permit for the existing fans/lighting; resolve Code Compliance case CC-26-01568-NOV. Building permit pulled owner-builder.",
+  "balance_terms": "Balance due upon the after-the-fact permit being finaled and Case CC-26-01568-NOV resolved with the City of Homestead."
+}
