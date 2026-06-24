@@ -43,6 +43,7 @@ from db import connect
 WORKFLOW_STATUSES: list[tuple[str, str]] = [
     ("intake",              "Intake"),
     ("provide_quote",       "Provide Quote to Client"),
+    ("proposal_sent",       "Proposal Sent to Client"),
     ("reviewing_documents", "Reviewing Documents"),
     ("meet_building_reviewers", "Meet with Building Reviewers"),
     ("awaiting_survey",     "Awaiting Survey"),
