@@ -236,10 +236,36 @@ app.secret_key = _load_or_create_secret()
 # requests are authenticated by the X-Cron-Secret header instead.
 _OPEN_ENDPOINTS = {"login", "static", "webhook_lob", "action_cron_daily_run"}
 
+# Operators (non-admin) are default-DENY: they may reach ONLY the endpoints
+# listed here — their own invoices (read + write) and self-service password.
+# Everything else (letter queue, sent letters, reports, PRRs, the leads
+# pipeline, contracts, scope modules, scrapers, search, settings, users, and
+# invoice CREATION) is admin-only. Row-level ownership is separately enforced
+# by _block_if_not_owner on every invoice/task route, so an operator can only
+# ever touch invoices assigned to them. Adding a new route? It's admin-only
+# until you explicitly add it here.
+OPERATOR_ALLOWED_ENDPOINTS = {
+    # framework / auth / self-service
+    "login", "logout", "static", "my_password", "my_password_skip",
+    # the operator's own invoices — list is owner-scoped server-side
+    "invoices_list",
+    "invoice_detail", "invoice_edit", "invoice_pdf", "invoice_proposal_pdf",
+    "invoice_cost_add", "invoice_cost_remove",
+    "invoice_permit_update", "invoice_permit_add",
+    "invoice_mark_sent", "invoice_record_payment", "invoice_payment_correct",
+    "invoice_record_deposit", "invoice_void",
+    "invoice_workflow_transition",
+    "invoice_task_add", "invoice_task_complete", "invoice_task_reopen",
+    "invoice_task_delete",
+    # harmless UI poll used by the shared layout
+    "api_task_status",
+}
+
 
 @app.before_request
 def _require_login():
-    """Gate every endpoint except /login and static files."""
+    """Gate every endpoint except /login and static files, then enforce the
+    operator allowlist (admins pass through to everything)."""
     if request.endpoint is None:
         return None
     if request.endpoint in _OPEN_ENDPOINTS:
@@ -247,6 +273,12 @@ def _require_login():
     if request.path.startswith("/static/"):
         return None
     if session.get("user"):
+        # Role gate: operators may only reach their own invoices + self-service.
+        if not is_admin() and request.endpoint not in OPERATOR_ALLOWED_ENDPOINTS:
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "forbidden"}), 403
+            flash("You don't have access to that.", "error")
+            return redirect(url_for("invoices_list"))
         return None
 
     # Not authenticated. For HTML routes redirect to login; for JSON return 401.
@@ -288,7 +320,8 @@ def login():
                         username, request.remote_addr)
             if (users.get(username) or {}).get("must_change_password"):
                 return redirect(url_for("my_password", first="1"))
-            return redirect(request.args.get("next") or url_for("dashboard"))
+            home = url_for("dashboard") if is_admin() else url_for("invoices_list")
+            return redirect(request.args.get("next") or home)
 
         rec = users.get(username)
         if rec and check_password_hash(rec.get("password_hash", ""), password):
@@ -297,7 +330,8 @@ def login():
             log.info("user %s signed in from %s", username, request.remote_addr)
             if rec.get("must_change_password"):
                 return redirect(url_for("my_password", first="1"))
-            return redirect(request.args.get("next") or url_for("dashboard"))
+            home = url_for("dashboard") if is_admin() else url_for("invoices_list")
+            return redirect(request.args.get("next") or home)
         flash("Invalid username or password.", "error")
         log.warning("login failed for %r from %s", username, request.remote_addr)
 

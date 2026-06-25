@@ -23,10 +23,12 @@
       <h1>Invoices</h1>
       <p class="hero-sub">Bill clients, track outstanding balances, and record payments.</p>
     </div>
+    {% if is_admin %}
     <div class="lead-hero-actions" style="display: flex; gap: 0.5rem;">
       <a class="btn-secondary" href="{{ url_for('proposal_new') }}">+ New Proposal</a>
       <a class="btn-primary" href="{{ url_for('invoice_new') }}">+ New Invoice</a>
     </div>
+    {% endif %}
   </div>
 </section>
 
@@ -178,7 +180,7 @@
     {% if active_status and active_status != 'all' %}
       No invoices with status "{{ active_status }}".
     {% else %}
-      No invoices yet. <a href="{{ url_for('invoice_new') }}">Create the first one</a>.
+      No invoices yet.{% if is_admin %} <a href="{{ url_for('invoice_new') }}">Create the first one</a>.{% else %} Nothing has been assigned to you yet.{% endif %}
     {% endif %}
   </p>
 </div>

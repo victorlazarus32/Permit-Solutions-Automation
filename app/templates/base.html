@@ -48,6 +48,7 @@
     </span>
   </a>
 
+  {% if is_admin %}
   <div class="quick-search">
     <span class="qs-icon" aria-hidden="true">⌕</span>
     <input
@@ -59,6 +60,7 @@
     <span class="qs-kbd">/</span>
     <div class="qs-results" id="qs-results" hidden></div>
   </div>
+  {% endif %}
 
   <button type="button" class="mobile-menu-toggle"
           aria-label="Toggle menu" aria-controls="primary-nav" aria-expanded="false">
@@ -70,15 +72,19 @@
   </button>
 
   <nav class="topnav" id="primary-nav">
+    {% if is_admin %}
     <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
     <a href="{{ url_for('queue') }}"     {% if request.endpoint == 'queue'     %}class="active"{% endif %}>Letter Queue</a>
     <a href="{{ url_for('sent') }}"      {% if request.endpoint == 'sent'      %}class="active"{% endif %}>Sent Letters</a>
-    {% if is_admin %}<a href="{{ url_for('reports') }}"   {% if request.endpoint == 'reports'   %}class="active"{% endif %}>Reports</a>{% endif %}
+    <a href="{{ url_for('reports') }}"   {% if request.endpoint == 'reports'   %}class="active"{% endif %}>Reports</a>
     <a href="{{ url_for('prr_index') }}" {% if request.endpoint and request.endpoint.startswith('prr_') %}class="active"{% endif %}>PRRs</a>
     <a href="{{ url_for('pipeline') }}"  {% if request.endpoint == 'pipeline'  %}class="active"{% endif %}>Pipeline</a>
+    {% endif %}
     <a href="{{ url_for('invoices_list') }}" {% if request.endpoint and request.endpoint.startswith('invoice') %}class="active"{% endif %}>Invoices</a>
+    {% if is_admin %}
     <a href="{{ url_for('settings') }}"  {% if request.endpoint and (request.endpoint == 'settings' or request.endpoint.startswith('contract') or request.endpoint.startswith('scope_module')) %}class="active"{% endif %}>Settings</a>
-    {% if is_admin %}<a href="{{ url_for('admin_users') }}" {% if request.endpoint and request.endpoint.startswith('admin_') %}class="active"{% endif %}>Users</a>{% endif %}
+    <a href="{{ url_for('admin_users') }}" {% if request.endpoint and request.endpoint.startswith('admin_') %}class="active"{% endif %}>Users</a>
+    {% endif %}
   </nav>
 
   {% if current_user %}
