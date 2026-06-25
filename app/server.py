@@ -1673,8 +1673,12 @@ def _build_custom_proposal_context(data: dict) -> dict:
             "service": it.get("service") or it.get("description") or "",
             "fee_display": _usd(amt),
         })
-    deposit = round(total * deposit_pct / 100.0, 2)
-    balance = round(total - deposit, 2)
+    single_payment = bool(data.get("single_payment", False))
+    if single_payment:
+        deposit, balance = 0.0, total
+    else:
+        deposit = round(total * deposit_pct / 100.0, 2)
+        balance = round(total - deposit, 2)
 
     date_display = data.get("date_display")
     if not date_display:
@@ -1700,6 +1704,8 @@ def _build_custom_proposal_context(data: dict) -> dict:
         "deposit_display": _usd(deposit),
         "balance_display": _usd(balance),
         "deposit_pct": deposit_pct,
+        "single_payment": bool(data.get("single_payment", False)),
+        "payment_note": data.get("payment_note") or "",
         "scope_property_head": data.get("scope_property_head") or "",
         "property_line": data.get("property_line") or "",
         "scope_items": items,
@@ -2295,10 +2301,13 @@ def proposal_new():
                 })
             first_addr = (data.get("property_address") or "").strip() or None
             scope_text = (data.get("scope_summary") or "").strip() or ctx["doc_title"]
-            terms = (
-                f"{ctx['deposit_pct']}% deposit to begin. "
-                + ((data.get("balance_terms") or "").strip() or ctx["balance_note"])
-            )
+            if ctx.get("single_payment"):
+                terms = (data.get("balance_terms") or "").strip() or "Full payment due to begin."
+            else:
+                terms = (
+                    f"{ctx['deposit_pct']}% deposit to begin. "
+                    + ((data.get("balance_terms") or "").strip() or ctx["balance_note"])
+                )
         else:
             permit_count = ctx["permit_count"]
             fee = float(data.get("fee_per_permit") or 0)

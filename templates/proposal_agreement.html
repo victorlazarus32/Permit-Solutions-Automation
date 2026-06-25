@@ -201,6 +201,13 @@
     <div class="col right">
       <div class="section-heading" style="margin-top: 4pt;">Payment Terms</div>
       <div class="price-box">
+        {% if is_custom and single_payment %}
+        <div class="price-line total">
+          <span class="desc">Total fee</span>
+          <span class="amt">{{ total_display }}</span>
+        </div>
+        {% if payment_note %}<div class="box-note">{{ payment_note }}</div>{% endif %}
+        {% else %}
         <div class="price-line">
           <span class="desc">Deposit to begin ({{ deposit_pct }}%)</span>
           <span class="amt">{{ deposit_display }}</span>
@@ -212,6 +219,7 @@
         <div class="box-note"><strong>Balance Due.</strong> {% if is_custom %}{{ balance_note }}{% else %}The remaining balance is due upon written
         confirmation that all expired permits listed in this Agreement have been closed, administratively
         cleared, or otherwise resolved with Miami-Dade County.{% endif %}</div>
+        {% endif %}
       </div>
     </div>
   </div>
