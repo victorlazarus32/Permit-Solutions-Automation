@@ -117,7 +117,7 @@
       <div class="form-field">
         <label for="owner">Owner</label>
         <select id="owner">
-          {% for u in all_users %}<option value="{{ u }}">{{ u }}</option>{% endfor %}
+          {% for u in all_users %}<option value="{{ u }}">{{ display_name(u) }}</option>{% endfor %}
         </select>
       </div>
       {% endif %}

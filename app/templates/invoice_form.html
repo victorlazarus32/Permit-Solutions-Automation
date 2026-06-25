@@ -391,7 +391,7 @@
       <label for="owner_select">Owner</label>
       <select name="owner" id="owner_select">
         {% for u in all_users %}
-          <option value="{{ u }}" {% if u == current_user %}selected{% endif %}>{{ u }}</option>
+          <option value="{{ u }}" {% if u == current_user %}selected{% endif %}>{{ display_name(u) }}</option>
         {% endfor %}
       </select>
       <small style="color: var(--ink-mute); font-size: 0.78rem;">Operators will only see invoices assigned to them.</small>

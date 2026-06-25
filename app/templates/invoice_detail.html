@@ -268,7 +268,7 @@
       <h3 class="lead-card-title">Billing</h3>
       <div class="lead-kv">
         <div class="kv"><span class="k">Status</span><span class="v"><span class="status status-{{ inv.status }}">{{ 'ESTIMATE' if inv.status == 'draft' else inv.status|upper }}</span></span></div>
-        <div class="kv"><span class="k">Owner</span><span class="v mono">{{ inv.owner or '—' }}</span></div>
+        <div class="kv"><span class="k">Owner</span><span class="v">{{ display_name(inv.owner) or '—' }}</span></div>
         <div class="kv"><span class="k">Issued</span><span class="v">{{ inv.issued_at[:10] if inv.issued_at else '—' }}</span></div>
         <div class="kv"><span class="k">Due</span><span class="v">{{ inv.due_at or '—' }}</span></div>
         {% if inv.paid_at %}<div class="kv"><span class="k">Paid</span><span class="v">{{ inv.paid_at[:10] }}</span></div>{% endif %}
@@ -283,7 +283,7 @@
           <select name="owner" style="flex: 1;">
             <option value="" {% if not inv.owner %}selected{% endif %}>(unassigned)</option>
             {% for u in all_users %}
-              <option value="{{ u }}" {% if u == inv.owner %}selected{% endif %}>{{ u }}</option>
+              <option value="{{ u }}" {% if u == inv.owner %}selected{% endif %}>{{ display_name(u) }}</option>
             {% endfor %}
           </select>
           <button type="submit" class="btn-secondary btn-tiny">Save</button>

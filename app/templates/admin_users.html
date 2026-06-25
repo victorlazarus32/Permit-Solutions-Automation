@@ -19,8 +19,8 @@
   <table class="data-table">
     <thead>
       <tr>
-        <th>Username</th>
-        <th>Full name</th>
+        <th>Name</th>
+        <th>Username (login)</th>
         <th>Role</th>
         <th class="num">Active invoices</th>
         <th>Actions</th>
@@ -29,8 +29,14 @@
     <tbody>
       {% for username, rec in users.items()|sort %}
       <tr>
-        <td class="mono">{{ username }}{% if username == current_user %} <span class="status status-paid" style="font-size: 0.7rem;">YOU</span>{% endif %}</td>
-        <td>{{ rec.full_name or '—' }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('admin_users_set_name', username=username) }}" style="display: inline-flex; gap: 6px; align-items: center;">
+            <input type="text" name="full_name" value="{{ rec.full_name or '' }}" placeholder="optional"
+                   style="font-size: 0.9rem; padding: 4px 8px; max-width: 160px;">
+            <button type="submit" class="btn-secondary btn-tiny">Save</button>
+          </form>
+        </td>
+        <td class="mono" style="font-size: 0.85rem;">{{ username }}{% if username == current_user %} <span class="status status-paid" style="font-size: 0.7rem;">YOU</span>{% endif %}{% if rec.must_change_password %} <span class="status" style="font-size: 0.7rem; color: var(--ink-mute);">first login pending</span>{% endif %}</td>
         <td>
           <form method="POST" action="{{ url_for('admin_users_set_role', username=username) }}" style="display: inline-flex; gap: 6px; align-items: center;">
             <select name="role" style="font-size: 0.85rem;">
@@ -72,12 +78,12 @@
   <form method="POST" action="{{ url_for('admin_users_add') }}">
     <div class="form-row">
       <div class="form-field">
-        <label for="new-username">Username</label>
-        <input type="text" name="username" id="new-username" required autocomplete="off" placeholder="e.g. mario">
+        <label for="new-full-name">Name <span style="color: var(--ink-mute); font-weight: 400;">(optional — shown across the app)</span></label>
+        <input type="text" name="full_name" id="new-full-name" placeholder="e.g. Mario Reyes">
       </div>
       <div class="form-field">
-        <label for="new-full-name">Full name</label>
-        <input type="text" name="full_name" id="new-full-name" placeholder="optional">
+        <label for="new-username">Username / login <span style="color: var(--red);">*</span></label>
+        <input type="text" name="username" id="new-username" required autocomplete="off" placeholder="e.g. mlfpermits@gmail.com">
       </div>
     </div>
     <div class="form-row">
@@ -88,8 +94,8 @@
         </select>
       </div>
       <div class="form-field">
-        <label for="new-password">Initial password</label>
-        <input type="text" name="password" id="new-password" required placeholder="they can change it later">
+        <label for="new-password">Temporary password</label>
+        <input type="text" name="password" id="new-password" required placeholder="they'll set their own on first login">
       </div>
     </div>
     <button type="submit" class="btn-primary">Create user</button>

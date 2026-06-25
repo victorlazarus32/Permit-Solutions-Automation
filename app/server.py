@@ -116,15 +116,18 @@ def _normalize_user_record(username: str, raw) -> dict:
     {password_hash, role, full_name}."""
     if isinstance(raw, str):
         role = "admin" if username in _BOOTSTRAP_ADMINS else DEFAULT_ROLE
-        return {"password_hash": raw, "role": role, "full_name": ""}
+        return {"password_hash": raw, "role": role, "full_name": "",
+                "must_change_password": False}
     if isinstance(raw, dict):
         return {
             "password_hash": raw.get("password_hash") or raw.get("password") or "",
             "role": raw.get("role") if raw.get("role") in ROLES else DEFAULT_ROLE,
             "full_name": raw.get("full_name") or "",
+            "must_change_password": bool(raw.get("must_change_password", False)),
         }
     # Garbage value — treat as no record.
-    return {"password_hash": "", "role": DEFAULT_ROLE, "full_name": ""}
+    return {"password_hash": "", "role": DEFAULT_ROLE, "full_name": "",
+            "must_change_password": False}
 
 
 def _load_users() -> dict:
@@ -177,6 +180,17 @@ def current_role() -> str:
 
 def is_admin() -> bool:
     return current_role() == "admin"
+
+
+def display_name(username: str) -> str:
+    """Friendly label for a user: their full name if set, else the username.
+    Used everywhere we show an owner so the UI reads 'Mario' rather than the
+    raw login/email. The stored owner value is always the username."""
+    username = (username or "").strip()
+    if not username:
+        return ""
+    rec = _user_record(username)
+    return ((rec or {}).get("full_name") or "").strip() or username
 
 
 def visible_invoices_filter() -> tuple[str, list]:
@@ -270,18 +284,20 @@ def login():
                 _save_users(users)
             session["user"] = username
             session.permanent = True
-            target = request.args.get("next") or url_for("dashboard")
             log.warning("AUTH BYPASS active: user %s signed in (any password) from %s",
                         username, request.remote_addr)
-            return redirect(target)
+            if (users.get(username) or {}).get("must_change_password"):
+                return redirect(url_for("my_password", first="1"))
+            return redirect(request.args.get("next") or url_for("dashboard"))
 
         rec = users.get(username)
         if rec and check_password_hash(rec.get("password_hash", ""), password):
             session["user"] = username
             session.permanent = True
-            target = request.args.get("next") or url_for("dashboard")
             log.info("user %s signed in from %s", username, request.remote_addr)
-            return redirect(target)
+            if rec.get("must_change_password"):
+                return redirect(url_for("my_password", first="1"))
+            return redirect(request.args.get("next") or url_for("dashboard"))
         flash("Invalid username or password.", "error")
         log.warning("login failed for %r from %s", username, request.remote_addr)
 
@@ -305,6 +321,7 @@ def _inject_globals() -> dict:
         "current_user": session.get("user"),
         "current_role": current_role(),
         "is_admin": is_admin(),
+        "display_name": display_name,
     }
 
 # Tracks the most recent long-running task so the UI can show progress.
@@ -3043,9 +3060,25 @@ def admin_users_add():
         "password_hash": generate_password_hash(password),
         "role": role,
         "full_name": full_name,
+        "must_change_password": True,
     }
     _save_users(users)
-    flash(f"Created user '{username}' ({role}).", "success")
+    flash(f"Created user '{username}' ({role}). They'll be prompted to set their own password on first login.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.post("/admin/users/<username>/name")
+@require_admin
+def admin_users_set_name(username: str):
+    username = (username or "").strip().lower()
+    full_name = (request.form.get("full_name") or "").strip()
+    users = _load_users()
+    if username not in users:
+        flash(f"No such user: {username}", "error")
+        return redirect(url_for("admin_users"))
+    users[username]["full_name"] = full_name
+    _save_users(users)
+    flash(f"Name updated for '{username}'.", "success")
     return redirect(url_for("admin_users"))
 
 
@@ -3086,8 +3119,9 @@ def admin_users_reset_password(username: str):
         flash(f"No such user: {username}", "error")
         return redirect(url_for("admin_users"))
     users[username]["password_hash"] = generate_password_hash(new_password)
+    users[username]["must_change_password"] = True
     _save_users(users)
-    flash(f"Password reset for '{username}'.", "success")
+    flash(f"Password reset for '{username}'. They'll be prompted to set a new one on next login.", "success")
     return redirect(url_for("admin_users"))
 
 
@@ -3115,12 +3149,28 @@ def my_password():
             flash("New password and confirmation do not match.", "error")
             return redirect(url_for("my_password"))
         rec["password_hash"] = generate_password_hash(new_pw)
+        rec["must_change_password"] = False
         users[username] = rec
         _save_users(users)
         log.info("user %s rotated their own password", username)
         flash("Password updated.", "success")
         return redirect(url_for("dashboard"))
-    return render_template("my_password.html")
+    first = request.args.get("first") == "1"
+    return render_template("my_password.html", first_login=first)
+
+
+@app.post("/me/password/skip")
+def my_password_skip():
+    """First-login prompt is optional — let the user skip and clears the flag
+    so they aren't prompted again."""
+    users = _load_users()
+    username = current_user()
+    rec = users.get(username)
+    if rec and rec.get("must_change_password"):
+        rec["must_change_password"] = False
+        users[username] = rec
+        _save_users(users)
+    return redirect(url_for("dashboard"))
 
 
 @app.post("/admin/users/<username>/delete")

@@ -86,7 +86,7 @@
       window.location.search = params.toString();
     " style="font-size: 0.85rem; padding: 4px 8px;">
       <option value="">All operators</option>
-      {% for u in all_users %}<option value="{{ u }}" {% if scope_owner == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
+      {% for u in all_users %}<option value="{{ u }}" {% if scope_owner == u %}selected{% endif %}>{{ display_name(u) }}</option>{% endfor %}
     </select>
   </span>
   {% endif %}
@@ -118,7 +118,7 @@
           {{ inv.client_name }}
           {% if inv.case_number %}<br><span class="mono" style="font-size: 0.8em; color: var(--ink-mute);">{{ inv.case_number }}</span>{% endif %}
         </td>
-        {% if is_admin %}<td class="mono" style="font-size: 0.85em; color: var(--ink-mute);">{{ inv.owner or '—' }}</td>{% endif %}
+        {% if is_admin %}<td style="font-size: 0.85em; color: var(--ink-mute);">{{ display_name(inv.owner) or '—' }}</td>{% endif %}
         <td>{{ inv.issued_at[:10] if inv.issued_at else '—' }}</td>
         <td>
           {{ inv.due_at or '—' }}
