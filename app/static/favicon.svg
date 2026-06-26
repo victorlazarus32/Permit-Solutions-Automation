@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Permit Solutions Services">
+  <title>Permit Solutions Services</title>
+  <rect width="256" height="256" rx="32" fill="#0A0A0A"/>
+  <text x="14" y="184" fill="#FAFAF7" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="140" letter-spacing="-8">PS</text>
+  <text x="223" y="92" text-anchor="middle" fill="#E8732C" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="58" letter-spacing="-1">2</text>
+  <circle cx="223" cy="181" r="10" fill="#E8732C"/>
+</svg>
